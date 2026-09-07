@@ -1,0 +1,6 @@
+{
+  "name": "GeoAtmosphere 3D Weather & Globe Dashboard",
+  "description": "Interactive 3D Earth globe with raycasting click-to-zoom, NASA FIRMS active wildfires, USGS earthquakes, OpenSky flights, God's Eye 3D photorealistic tiles, and Gemini AI Spatial Copilot.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
