@@ -9,7 +9,8 @@ import type {
   LiveFlight,
   IntelligenceLayerType,
 } from '../types';
-import { Sun, RotateCw, MapPin, Eye, Compass, Route } from 'lucide-react';
+import { Sun, RotateCw, MapPin, Eye, Compass, Route, Map } from 'lucide-react';
+import { isLandCoordinate, initSurfaceMaskFromImage } from '../utils/surfaceClassifier';
 
 export interface ThreeGlobeProps {
   currentLat: number | null;
@@ -20,6 +21,7 @@ export interface ThreeGlobeProps {
   autoRotateGlobe: boolean;
   onToggleAutoRotate?: () => void;
   onOpenStreetMap?: () => void;
+  isMapViewActive?: boolean;
   // Spatial Intelligence Feeds
   fires?: FireHotspot[];
   earthquakes?: EarthquakeData[];
@@ -135,6 +137,7 @@ function createAtmosphereMaterial(): THREE.ShaderMaterial {
 
 /**
  * Pure Daylight Earth Shader Material (100% Day Illumination across all continents & oceans)
+ * Enhanced with anisotropic texture filtering, micro-detail relief & bicubic smoothing to prevent pixelation on zoom
  */
 function createEarthMaterial(
   textures: {
@@ -167,6 +170,22 @@ function createEarthMaterial(
     varying vec3 vNormal;
     varying vec3 vPosition;
 
+    // Procedural high-frequency micro-normal perturbation for zoom-in anti-pixelation
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    }
+
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
     void main() {
       vec3 normal = normalize(vNormal);
       vec3 viewDir = normalize(-vPosition);
@@ -177,13 +196,17 @@ function createEarthMaterial(
       vec4 normalSample = texture2D(uNormalMap, vUv);
       float specularStrength = texture2D(uSpecularMap, vUv).r;
 
-      // Realistic bump perturbation from NASA normal map
-      vec3 perturbedNormal = normalize(normal + (normalSample.xyz * 2.0 - 1.0) * 0.16);
+      // Realistic bump perturbation from NASA normal map + micro-topography on zoom
+      vec3 bumpNorm = (normalSample.xyz * 2.0 - 1.0) * 0.18;
+      
+      // Micro-detail texture noise to break up pixel grid when zoomed in close
+      float microDetail = (noise(vUv * 2048.0) - 0.5) * 0.04 * (1.0 - specularStrength);
+      vec3 perturbedNormal = normalize(normal + bumpNorm + vec3(microDetail, microDetail, 0.0));
 
-      // Daylight shading: base ambient 0.74 ensures NO dark night side anywhere on the planet!
+      // Daylight shading: base ambient 0.76 ensures NO dark night side anywhere on the planet!
       float sunDot = max(dot(perturbedNormal, sunDir), 0.0);
       float viewDot = max(dot(perturbedNormal, viewDir), 0.0);
-      float daylight = 0.76 + sunDot * 0.30 + viewDot * 0.14;
+      float daylight = 0.78 + sunDot * 0.28 + viewDot * 0.14;
       vec3 litDay = dayColor.rgb * daylight;
 
       // Physical sun glint on daytime oceans
@@ -222,6 +245,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
       autoRotateGlobe,
       onToggleAutoRotate,
       onOpenStreetMap,
+      isMapViewActive = false,
       fires = [],
       earthquakes = [],
       flights = [],
@@ -247,9 +271,20 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     const particlePositionsRef = useRef<Float32Array | null>(null);
     const particleVelocitiesRef = useRef<Float32Array | null>(null);
     const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+    const manualZoomCrossedRef = useRef<boolean>(false);
+
+    // Continuous 3D Marine surface zoom indicator when zooming over water
+    const [isOverWater, setIsOverWater] = useState<boolean>(false);
+    const [waterCoords, setWaterCoords] = useState<{ lat: number; lon: number } | null>(null);
+    const isOverWaterRef = useRef<boolean>(false);
 
     // Daylight Earth view with UTC clock tracking
     const [currentUtcString, setCurrentUtcString] = useState<string>('');
+
+    const isMapViewActiveRef = useRef(isMapViewActive);
+    useEffect(() => {
+      isMapViewActiveRef.current = isMapViewActive;
+    }, [isMapViewActive]);
 
     // Pointer down tracking to distinguish drag vs click
     const pointerDownPos = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
@@ -304,8 +339,13 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         const controls = controlsRef.current;
 
         const surfacePos = latLonToVector3(lat, lon, 5.0);
-        const normal = surfacePos.clone().normalize();
+        // Correctly transform surface local coordinate to world space considering globe tilt
+        const surfacePosWorld = globeGroupRef.current
+          ? globeGroupRef.current.localToWorld(surfacePos.clone())
+          : surfacePos;
+        const normal = surfacePosWorld.clone().normalize();
         const targetCameraPos = normal.clone().multiplyScalar(altitude);
+        const onLand = isLandCoordinate(lat, lon);
 
         controls.autoRotate = false;
         let thresholdTriggered = false;
@@ -319,14 +359,17 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
           onUpdate: () => {
             camera.lookAt(controls.target);
             const dist = camera.position.length();
-            if (!thresholdTriggered && dist <= 6.6) {
+            // If location is on land, trigger threshold handoff
+            if (onLand && !thresholdTriggered && dist <= 6.6) {
               thresholdTriggered = true;
+              manualZoomCrossedRef.current = true;
               if (onThresholdCrossed) onThresholdCrossed();
             }
           },
           onComplete: () => {
-            if (!thresholdTriggered && onThresholdCrossed) {
+            if (onLand && !thresholdTriggered && onThresholdCrossed) {
               thresholdTriggered = true;
+              manualZoomCrossedRef.current = true;
               onThresholdCrossed();
             }
             if (onComplete) onComplete();
@@ -353,16 +396,35 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         const camera = cameraRef.current;
         const controls = controlsRef.current;
 
+        // Prevent immediate re-trigger while pulling back
+        manualZoomCrossedRef.current = true;
+        setIsOverWater(false);
+
+        // Pull straight back along current camera view angle to full orbital distance 14.5
+        const dir = camera.position.clone().normalize();
+        let targetX = dir.x * 14.5;
+        let targetY = dir.y * 14.5;
+        let targetZ = dir.z * 14.5;
+        if (isNaN(targetX) || dir.length() < 0.1) {
+          targetX = 0;
+          targetY = 4;
+          targetZ = 14.5;
+        }
+
+        gsap.killTweensOf(camera.position);
+        gsap.killTweensOf(controls.target);
+
         gsap.to(camera.position, {
-          x: 0,
-          y: 4,
-          z: 14.5,
-          duration: 1.4,
+          x: targetX,
+          y: targetY,
+          z: targetZ,
+          duration: 1.3,
           ease: 'power3.inOut',
           onUpdate: () => {
             camera.lookAt(0, 0, 0);
           },
           onComplete: () => {
+            manualZoomCrossedRef.current = false;
             if (onComplete) onComplete();
           },
         });
@@ -371,7 +433,8 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
           x: 0,
           y: 0,
           z: 0,
-          duration: 1.2,
+          duration: 1.1,
+          ease: 'power2.out',
         });
 
         if (autoRotateGlobe) {
@@ -489,7 +552,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     }, []);
 
     /**
-     * Updates 3D NASA FIRMS Active Wildfire Beacons
+     * Updates 3D NASA FIRMS Active Wildfire Beacons with distinct models based on FRP & Intensity
      */
     const updateFiresLayer = useCallback((fireList: FireHotspot[], visible: boolean) => {
       if (!firesGroupRef.current) return;
@@ -505,13 +568,17 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         const normal = pos.clone().normalize();
         fireContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
+        const isMega = fire.frp >= 140 || fire.brightness >= 340;
+        const isCanopy = fire.frp >= 50 && fire.frp < 140;
+
         // Ground burn radius ring
-        const groundGeom = new THREE.RingGeometry(0.04, 0.09, 20);
+        const groundRadius = isMega ? 0.12 : isCanopy ? 0.08 : 0.05;
+        const groundGeom = new THREE.RingGeometry(groundRadius * 0.4, groundRadius, 24);
         const groundMat = new THREE.MeshBasicMaterial({
-          color: 0xff3700,
+          color: isMega ? 0xdc2626 : isCanopy ? 0xff3700 : 0xf59e0b,
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: 0.8,
+          opacity: isMega ? 0.9 : 0.75,
         });
         const groundMesh = new THREE.Mesh(groundGeom, groundMat);
         groundMesh.rotation.x = Math.PI / 2;
@@ -519,12 +586,17 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         fireContainer.add(groundMesh);
 
         // Vertical flame cone
-        const flameHeight = Math.min(0.35, 0.12 + (fire.frp / 400) * 0.22);
-        const flameGeom = new THREE.ConeGeometry(0.035, flameHeight, 12);
+        const flameHeight = isMega
+          ? Math.min(0.48, 0.22 + (fire.frp / 400) * 0.26)
+          : isCanopy
+          ? Math.min(0.32, 0.14 + (fire.frp / 400) * 0.18)
+          : 0.16;
+        const flameWidth = isMega ? 0.055 : isCanopy ? 0.038 : 0.024;
+        const flameGeom = new THREE.ConeGeometry(flameWidth, flameHeight, 14);
         const flameMat = new THREE.MeshBasicMaterial({
-          color: 0xff7700,
+          color: isMega ? 0xff5500 : isCanopy ? 0xff7700 : 0xfbbf24,
           transparent: true,
-          opacity: 0.88,
+          opacity: 0.92,
         });
         const flameMesh = new THREE.Mesh(flameGeom, flameMat);
         flameMesh.position.y = flameHeight / 2;
@@ -532,12 +604,27 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         fireContainer.add(flameMesh);
 
         // Glowing ember at tip
-        const tipGeom = new THREE.SphereGeometry(0.02, 8, 8);
-        const tipMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const tipRadius = isMega ? 0.032 : isCanopy ? 0.022 : 0.016;
+        const tipGeom = new THREE.SphereGeometry(tipRadius, 10, 10);
+        const tipMat = new THREE.MeshBasicMaterial({ color: isMega ? 0xffffff : 0xffdd00 });
         const tipMesh = new THREE.Mesh(tipGeom, tipMat);
         tipMesh.position.y = flameHeight;
         tipMesh.userData = { type: 'fires', data: fire };
         fireContainer.add(tipMesh);
+
+        // For Mega Fires: Add smoke puff sphere
+        if (isMega) {
+          const smokeGeom = new THREE.SphereGeometry(0.045, 8, 8);
+          const smokeMat = new THREE.MeshBasicMaterial({
+            color: 0x334155,
+            transparent: true,
+            opacity: 0.65,
+          });
+          const smokeMesh = new THREE.Mesh(smokeGeom, smokeMat);
+          smokeMesh.position.y = flameHeight + 0.05;
+          smokeMesh.userData = { type: 'fires', data: fire };
+          fireContainer.add(smokeMesh);
+        }
 
         fireContainer.userData = { type: 'fires', data: fire };
         group.add(fireContainer);
@@ -545,7 +632,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     }, []);
 
     /**
-     * Updates 3D USGS Earthquake Shockwaves & Depths
+     * Updates 3D USGS Earthquake Shockwaves & Depths with distinct styles for shallow megathrust vs deep subduction
      */
     const updateQuakesLayer = useCallback((quakeList: EarthquakeData[], visible: boolean) => {
       if (!quakesGroupRef.current) return;
@@ -561,17 +648,18 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         const normal = pos.clone().normalize();
         quakeContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
-        const isHigh = quake.magnitude >= 5.0;
+        const isMega = quake.magnitude >= 6.8;
+        const isDeep = (quake.depth || 10) >= 60;
         const color = quake.magnitude >= 6.0 ? 0xef4444 : quake.magnitude >= 4.5 ? 0xf59e0b : 0xeab308;
-        const radius = Math.max(0.06, (quake.magnitude / 8.0) * 0.22);
+        const radius = Math.max(0.06, (quake.magnitude / 8.0) * 0.24);
 
         // Concentric expanding shockwave ring
-        const ringGeom = new THREE.RingGeometry(radius * 0.85, radius, 24);
+        const ringGeom = new THREE.RingGeometry(radius * 0.82, radius, 28);
         const ringMat = new THREE.MeshBasicMaterial({
           color,
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: isHigh ? 0.9 : 0.7,
+          opacity: isMega ? 0.95 : 0.72,
         });
         const ringMesh = new THREE.Mesh(ringGeom, ringMat);
         ringMesh.rotation.x = Math.PI / 2;
@@ -579,20 +667,46 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         quakeContainer.add(ringMesh);
 
         // Center epicenter dot
-        const dotGeom = new THREE.SphereGeometry(0.025, 12, 12);
+        const dotRadius = isMega ? 0.035 : 0.024;
+        const dotGeom = new THREE.SphereGeometry(dotRadius, 12, 12);
         const dotMat = new THREE.MeshBasicMaterial({ color });
         const dotMesh = new THREE.Mesh(dotGeom, dotMat);
         dotMesh.userData = { type: 'earthquakes', data: quake };
         quakeContainer.add(dotMesh);
 
         // Subsurface hypocenter depth spike
-        const depthLen = Math.min(0.3, Math.max(0.05, (quake.depth / 200) * 0.25));
-        const stemGeom = new THREE.CylinderGeometry(0.006, 0.006, depthLen, 8);
-        const stemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 });
+        const depthLen = Math.min(0.45, Math.max(0.06, (quake.depth / 200) * 0.35));
+        const stemGeom = new THREE.CylinderGeometry(0.007, 0.007, depthLen, 8);
+        const stemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: isDeep ? 0.85 : 0.5 });
         const stemMesh = new THREE.Mesh(stemGeom, stemMat);
         stemMesh.position.y = -depthLen / 2;
         stemMesh.userData = { type: 'earthquakes', data: quake };
         quakeContainer.add(stemMesh);
+
+        // If Mega: Add secondary outer shockwave ring
+        if (isMega) {
+          const outerRingGeom = new THREE.RingGeometry(radius * 1.35, radius * 1.45, 28);
+          const outerRingMat = new THREE.MeshBasicMaterial({
+            color: 0xef4444,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.5,
+          });
+          const outerRingMesh = new THREE.Mesh(outerRingGeom, outerRingMat);
+          outerRingMesh.rotation.x = Math.PI / 2;
+          outerRingMesh.userData = { type: 'earthquakes', data: quake };
+          quakeContainer.add(outerRingMesh);
+        }
+
+        // If Deep Subduction: Add glowing core sphere at hypocenter depth
+        if (isDeep) {
+          const coreGeom = new THREE.SphereGeometry(0.028, 10, 10);
+          const coreMat = new THREE.MeshBasicMaterial({ color: 0x818cf8 });
+          const coreMesh = new THREE.Mesh(coreGeom, coreMat);
+          coreMesh.position.y = -depthLen;
+          coreMesh.userData = { type: 'earthquakes', data: quake };
+          quakeContainer.add(coreMesh);
+        }
 
         quakeContainer.userData = { type: 'earthquakes', data: quake };
         group.add(quakeContainer);
@@ -600,7 +714,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     }, []);
 
     /**
-     * Updates 3D OpenSky Live Aircraft Vector Positions
+     * Updates 3D OpenSky Live Aircraft Vector Positions with distinct models for Fighters, Helicopters, and Airliners
      */
     const updateFlightsLayer = useCallback((flightList: LiveFlight[], visible: boolean) => {
       if (!flightsGroupRef.current) return;
@@ -611,29 +725,95 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
 
       flightList.forEach((flight) => {
         const flightContainer = new THREE.Group();
-        const altOffset = 0.12 + Math.min(0.14, (flight.altitude / 15000) * 0.1);
+        const altOffset = 0.12 + Math.min(0.16, (flight.altitude / 15000) * 0.1);
         const pos = latLonToVector3(flight.lat, flight.lon, 5.0 + altOffset);
         flightContainer.position.copy(pos);
 
         const normal = pos.clone().normalize();
         flightContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
-        // 3D Airplane Mesh (Fuselage + Swept Wings)
+        const isFighter = !!(flight.callsign?.match(/VIPER|TOPCAT|GHOST|SWIFT|REACH|RCH|F16|F35|TYPHOON|JAS|MIG|SU/i) || flight.velocity > 230);
+        const isHelicopter = !!(flight.callsign?.match(/MED|HELI|POLICE|RESCUE|LIFE|AIR1|H60|CH47|UH60/i) || (flight.altitude < 1800 && flight.velocity < 80));
+
         const planeGroup = new THREE.Group();
 
-        const fuseGeom = new THREE.CylinderGeometry(0.012, 0.008, 0.08, 8);
-        const fuseMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-        const fuseMesh = new THREE.Mesh(fuseGeom, fuseMat);
-        fuseMesh.rotation.x = Math.PI / 2;
-        fuseMesh.userData = { type: 'flights', data: flight };
-        planeGroup.add(fuseMesh);
+        if (isHelicopter) {
+          // Rotorcraft model with spinning rotor blur
+          const cabinGeom = new THREE.BoxGeometry(0.024, 0.02, 0.05);
+          const cabinMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+          const cabinMesh = new THREE.Mesh(cabinGeom, cabinMat);
+          planeGroup.add(cabinMesh);
 
-        const wingGeom = new THREE.BoxGeometry(0.09, 0.004, 0.02);
-        const wingMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc });
-        const wingMesh = new THREE.Mesh(wingGeom, wingMat);
-        wingMesh.position.z = -0.01;
-        wingMesh.userData = { type: 'flights', data: flight };
-        planeGroup.add(wingMesh);
+          // Rotor disc
+          const rotorGeom = new THREE.RingGeometry(0.005, 0.042, 16);
+          const rotorMat = new THREE.MeshBasicMaterial({
+            color: 0x6ee7b7,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.7,
+          });
+          const rotorMesh = new THREE.Mesh(rotorGeom, rotorMat);
+          rotorMesh.name = 'helicopterRotor';
+          rotorMesh.rotation.x = Math.PI / 2;
+          rotorMesh.position.y = 0.015;
+          planeGroup.add(rotorMesh);
+        } else if (isFighter) {
+          // Sleek Delta Wing Fighter
+          const fuseGeom = new THREE.ConeGeometry(0.014, 0.09, 6);
+          fuseGeom.rotateX(Math.PI / 2);
+          const fuseMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+          const fuseMesh = new THREE.Mesh(fuseGeom, fuseMat);
+          fuseMesh.userData = { type: 'flights', data: flight };
+          planeGroup.add(fuseMesh);
+
+          const deltaGeom = new THREE.BufferGeometry();
+          const deltaVerts = new Float32Array([
+            0, 0, -0.04,   // nose
+            0.05, 0, 0.035, // right wing
+            -0.05, 0, 0.035 // left wing
+          ]);
+          deltaGeom.setAttribute('position', new THREE.BufferAttribute(deltaVerts, 3));
+          deltaGeom.computeVertexNormals();
+          const deltaMat = new THREE.MeshBasicMaterial({ color: 0xf87171, side: THREE.DoubleSide });
+          const deltaMesh = new THREE.Mesh(deltaGeom, deltaMat);
+          planeGroup.add(deltaMesh);
+
+          // Glowing afterburner dot
+          const afterburnerGeom = new THREE.SphereGeometry(0.008, 6, 6);
+          const afterburnerMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+          const afterburnerMesh = new THREE.Mesh(afterburnerGeom, afterburnerMat);
+          afterburnerMesh.position.z = 0.042;
+          planeGroup.add(afterburnerMesh);
+        } else {
+          // Commercial Airliner (Fuselage + Swept Wings + Twin Contrails)
+          const fuseGeom = new THREE.CylinderGeometry(0.012, 0.008, 0.08, 8);
+          const fuseMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+          const fuseMesh = new THREE.Mesh(fuseGeom, fuseMat);
+          fuseMesh.rotation.x = Math.PI / 2;
+          fuseMesh.userData = { type: 'flights', data: flight };
+          planeGroup.add(fuseMesh);
+
+          const wingGeom = new THREE.BoxGeometry(0.095, 0.004, 0.02);
+          const wingMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc });
+          const wingMesh = new THREE.Mesh(wingGeom, wingMat);
+          wingMesh.position.z = -0.01;
+          wingMesh.userData = { type: 'flights', data: flight };
+          planeGroup.add(wingMesh);
+
+          // Twin subtle contrails behind wings
+          [-0.03, 0.03].forEach((offset) => {
+            const contrailGeom = new THREE.CylinderGeometry(0.002, 0.005, 0.06, 4);
+            contrailGeom.rotateX(Math.PI / 2);
+            const contrailMat = new THREE.MeshBasicMaterial({
+              color: 0xffffff,
+              transparent: true,
+              opacity: 0.45,
+            });
+            const contrailMesh = new THREE.Mesh(contrailGeom, contrailMat);
+            contrailMesh.position.set(offset, -0.002, 0.05);
+            planeGroup.add(contrailMesh);
+          });
+        }
 
         planeGroup.rotation.y = -(flight.heading * Math.PI) / 180;
         flightContainer.add(planeGroup);
@@ -674,9 +854,9 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     // Sync autoRotate
     useEffect(() => {
       if (controlsRef.current) {
-        controlsRef.current.autoRotate = autoRotateGlobe;
+        controlsRef.current.autoRotate = !isMapViewActive && autoRotateGlobe;
       }
-    }, [autoRotateGlobe]);
+    }, [isMapViewActive, autoRotateGlobe]);
 
     // Initialize 3D Photorealistic Scene in 100% Daylight
     useEffect(() => {
@@ -702,7 +882,8 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         powerPreference: 'high-performance',
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.15;
       renderer.domElement.id = 'three-canvas';
@@ -721,7 +902,8 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
       controls.dampingFactor = 0.05;
       controls.autoRotate = autoRotateGlobe;
       controls.autoRotateSpeed = 0.45;
-      controls.minDistance = 6.4;
+      // Allow deep close-up marine surface inspection (radius is 5.0)
+      controls.minDistance = 5.08;
       controls.maxDistance = 26.0;
       controls.enablePan = false;
       controlsRef.current = controls;
@@ -792,22 +974,77 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
       scene.add(globeGroup);
       globeGroupRef.current = globeGroup;
 
-      // 8. High-Resolution NASA Textures (Pure Daytime Textures)
+      // 8. High-Resolution NASA Textures (4K Ultra-HD Daytime Textures with Anisotropic Filtering)
       const textureLoader = new THREE.TextureLoader();
-      const dayTexture = textureLoader.load('/textures/earth_atmos_2048.jpg');
-      const normalTexture = textureLoader.load('/textures/earth_normal_2048.jpg');
-      const specularTexture = textureLoader.load('/textures/earth_specular_2048.jpg');
-      const cloudsTexture = textureLoader.load('/textures/earth_clouds_1024.png');
+      const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+      const dayTexture = textureLoader.load(
+        '/textures/earth_atmos_4096.jpg',
+        (tex) => {
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.anisotropy = maxAnisotropy;
+          tex.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          dayTexture.image = textureLoader.load('/textures/earth_atmos_2048.jpg').image;
+        }
+      );
+
+      const normalTexture = textureLoader.load(
+        '/textures/earth_bump_4096.jpg',
+        (tex) => {
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.anisotropy = maxAnisotropy;
+          tex.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          normalTexture.image = textureLoader.load('/textures/earth_normal_2048.jpg').image;
+        }
+      );
+
+      const specularTexture = textureLoader.load('/textures/earth_specular_2048.jpg', (tex) => {
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = maxAnisotropy;
+        tex.needsUpdate = true;
+        if (tex.image) {
+          initSurfaceMaskFromImage(tex.image);
+        }
+      });
+
+      const cloudsTexture = textureLoader.load(
+        '/textures/earth_clouds_4096.jpg',
+        (tex) => {
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.anisotropy = maxAnisotropy;
+          tex.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          cloudsTexture.image = textureLoader.load('/textures/earth_clouds_1024.png').image;
+        }
+      );
 
       [dayTexture, normalTexture, specularTexture, cloudsTexture].forEach((tex) => {
         tex.wrapS = THREE.ClampToEdgeWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
-        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = maxAnisotropy;
       });
 
-      // 9. Earth Sphere Mesh (Ultra smooth 128x128 sphere, 100% Day Illumination)
-      const earthGeometry = new THREE.SphereGeometry(5.0, 128, 128);
+      // 9. Earth Sphere Mesh (Ultra smooth 160x160 sphere, 100% Day Illumination)
+      const earthGeometry = new THREE.SphereGeometry(5.0, 160, 160);
       const earthMaterial = createEarthMaterial(
         {
           day: dayTexture,
@@ -821,8 +1058,8 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
       earthMeshRef.current = earthMesh;
       earthMaterialRef.current = earthMaterial;
 
-      // 10. Floating Cloud Layer (radius 5.06)
-      const cloudsGeometry = new THREE.SphereGeometry(5.06, 96, 96);
+      // 10. Floating Cloud Layer (radius 5.06, 128x128)
+      const cloudsGeometry = new THREE.SphereGeometry(5.06, 128, 128);
       const cloudsMaterial = new THREE.MeshLambertMaterial({
         map: cloudsTexture,
         transparent: true,
@@ -1059,28 +1296,53 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         // Spatial Intelligence Layers Animation
         if (firesGroupRef.current && activeLayers.fires) {
           firesGroupRef.current.children.forEach((fGroup: any, idx) => {
+            const fireData = fGroup.userData?.data;
+            const isMega = fireData?.frp >= 140;
             const tipMesh = fGroup.children[2];
             if (tipMesh) {
-              const flicker = 0.8 + Math.sin(elapsedTime * 6.5 + idx * 1.7) * 0.25;
+              const freq = isMega ? 10.0 : 6.5;
+              const flicker = (isMega ? 1.0 : 0.8) + Math.sin(elapsedTime * freq + idx * 1.7) * (isMega ? 0.45 : 0.25);
               tipMesh.scale.set(flicker, flicker, flicker);
+            }
+            // Animate secondary smoke plume puff for mega fires
+            const smokeMesh = fGroup.children[3];
+            if (smokeMesh) {
+              const smokePulse = 1.0 + Math.sin(elapsedTime * 3.2 + idx) * 0.25;
+              smokeMesh.scale.set(smokePulse, smokePulse, smokePulse);
             }
           });
         }
 
         if (quakesGroupRef.current && activeLayers.earthquakes) {
           quakesGroupRef.current.children.forEach((qGroup: any, idx) => {
+            const quakeData = qGroup.userData?.data;
+            const isMega = (quakeData?.magnitude || 0) >= 6.8;
             const ringMesh = qGroup.children[0];
             if (ringMesh) {
-              const wave = 1.0 + Math.sin(elapsedTime * 3.2 + idx * 0.8) * 0.2;
+              const waveSpeed = isMega ? 4.5 : 3.2;
+              const waveAmp = isMega ? 0.35 : 0.2;
+              const wave = 1.0 + Math.sin(elapsedTime * waveSpeed + idx * 0.8) * waveAmp;
               ringMesh.scale.set(wave, wave, 1);
+            }
+            // Secondary outer ring for mega quakes
+            const outerRing = qGroup.children[3];
+            if (outerRing) {
+              const outerWave = 1.0 + Math.cos(elapsedTime * 4.0 + idx * 0.8) * 0.3;
+              outerRing.scale.set(outerWave, outerWave, 1);
             }
           });
         }
 
         if (flightsGroupRef.current && activeLayers.flights) {
           flightsGroupRef.current.children.forEach((flightGroup: any) => {
+            // Spin helicopter rotor blur disc
+            const rotor = flightGroup.getObjectByName('helicopterRotor');
+            if (rotor) {
+              rotor.rotation.y += 0.45;
+            }
+
             if (flightGroup.userData) {
-              const bob = Math.sin(elapsedTime * 2.0 + (flightGroup.userData.heading || 0)) * 0.003;
+              const bob = Math.sin(elapsedTime * 2.5 + (flightGroup.userData.heading || 0)) * 0.003;
               flightGroup.position.y += bob * 0.005;
             }
           });
@@ -1112,6 +1374,45 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         }
 
         controls.update();
+
+        // Intelligent Proximity Monitoring: automatically transitions to high-detail map when user zooms into the globe
+        if (!isMapViewActiveRef.current) {
+          const camDistance = camera.position.length();
+
+          // Calculate surface coordinate centered in viewport (camera position vector pointed at origin)
+          const camNorm = camera.position.clone().normalize();
+          const worldLookPoint = camNorm.clone().multiplyScalar(5.0);
+          const localPoint = globeGroupRef.current
+            ? globeGroupRef.current.worldToLocal(worldLookPoint.clone())
+            : worldLookPoint;
+          const { lat, lon } = vector3ToLatLon(localPoint, 5.0);
+          const onLand = isLandCoordinate(lat, lon);
+
+          // If zoomed in close (distance <= 6.20), trigger seamless transition to Google Map!
+          // Radius is 5.0. 6.20 gives a natural, responsive zoom hand-off as the user zooms toward any point on Earth.
+          if (camDistance <= 6.20 && onZoomThresholdCrossedRef.current && !manualZoomCrossedRef.current) {
+            manualZoomCrossedRef.current = true;
+            if (isOverWaterRef.current) {
+              isOverWaterRef.current = false;
+              setIsOverWater(false);
+            }
+            const roundedLat = Math.round(lat * 10000) / 10000;
+            const roundedLon = Math.round(lon * 10000) / 10000;
+            onZoomThresholdCrossedRef.current(roundedLat, roundedLon);
+          } else if (!onLand && camDistance > 6.20 && isOverWaterRef.current) {
+            isOverWaterRef.current = false;
+            setIsOverWater(false);
+          }
+
+          if (camDistance > 6.45) {
+            manualZoomCrossedRef.current = false;
+            if (isOverWaterRef.current) {
+              isOverWaterRef.current = false;
+              setIsOverWater(false);
+            }
+          }
+        }
+
         renderer.render(scene, camera);
       };
 
@@ -1139,6 +1440,20 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
 
     return (
       <div ref={containerRef} className="absolute inset-0 w-full h-full overflow-hidden select-none">
+        {/* Ocean Surface Continuous Zoom Telemetry Badge */}
+        {isOverWater && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex items-center gap-2 px-4 py-2 rounded-full bg-[#081528]/95 border border-cyan-400/50 shadow-2xl backdrop-blur-xl text-xs text-cyan-200 animate-fade-in">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-400"></span>
+            </span>
+            <span className="font-semibold tracking-wide">🌊 Ocean Waters • Continuous 3D Marine Surface Zoom</span>
+            <span className="font-mono text-[10px] text-cyan-300/80">
+              {waterCoords ? `(${waterCoords.lat.toFixed(2)}°, ${waterCoords.lon.toFixed(2)}°)` : ''}
+            </span>
+          </div>
+        )}
+
         {/* Real-time Globe Controls & Status HUD */}
         <div
           id="globe-realtime-hud"
@@ -1185,16 +1500,16 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
               <span>Orbit</span>
             </button>
 
-            {/* Street Roads Trigger */}
+            {/* Map & Street Roads Trigger */}
             {onOpenStreetMap && (
               <button
                 id="inspect-street-map-btn"
                 onClick={onOpenStreetMap}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-sky-600/40 to-blue-600/40 text-sky-200 border border-sky-400/40 hover:border-sky-400 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer"
-                title="Open high-precision street roads & navigation view"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-500/40 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer"
+                title="Open 2D high-precision map, streets & live traffic"
               >
-                <Route className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-                <span>Street Roads</span>
+                <Map className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Open Map</span>
               </button>
             )}
           </div>

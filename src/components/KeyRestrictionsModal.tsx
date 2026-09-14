@@ -33,10 +33,17 @@ export const KeyRestrictionsModal: React.FC<KeyRestrictionsModalProps> = ({
   onClose,
   onKeyUpdated,
 }) => {
-  const [apiKeyInput, setApiKeyInput] = useState<string>(getGoogleMapsApiKey());
+  const [apiKeyInput, setApiKeyInput] = useState<string>(() => getGoogleMapsApiKey());
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Synchronize input when modal is opened
+  React.useEffect(() => {
+    if (isOpen) {
+      setApiKeyInput(getGoogleMapsApiKey());
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -45,7 +52,11 @@ export const KeyRestrictionsModal: React.FC<KeyRestrictionsModalProps> = ({
   const hasKey = Boolean(currentKey && currentKey.length > 5);
 
   const handleCopy = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch((err) => {
+        console.warn('[Clipboard] Copy notice:', err);
+      });
+    }
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
@@ -199,16 +210,16 @@ export const KeyRestrictionsModal: React.FC<KeyRestrictionsModalProps> = ({
           <div className="flex items-center justify-between">
             <label className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
               <KeyRound className="w-3.5 h-3.5 text-sky-400" />
-              <span>Configure Restricted Key (In-App or via .env)</span>
+              <span>Google Maps API Key (Optional)</span>
             </label>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                 hasKey
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
-                  : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                  : 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
               }`}
             >
-              {hasKey ? 'Key Configured' : 'Keyless Fallback Mode Active'}
+              {hasKey ? 'Google Maps Active' : 'Precision Engine Active (No Key Needed)'}
             </span>
           </div>
 
@@ -217,7 +228,7 @@ export const KeyRestrictionsModal: React.FC<KeyRestrictionsModalProps> = ({
               type="text"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Paste your URL-restricted Google Maps API key..."
+              placeholder="Paste your URL-restricted Google Maps API key (or leave empty)..."
               className="flex-1 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400 font-mono"
             />
             <button
@@ -235,9 +246,8 @@ export const KeyRestrictionsModal: React.FC<KeyRestrictionsModalProps> = ({
               )}
             </button>
           </div>
-          <p className="text-[10px] text-slate-500">
-            Keys can also be defined statically in <code>.env</code> under{' '}
-            <code className="text-sky-400">VITE_GOOGLE_MAPS_API_KEY</code>.
+          <p className="text-[10px] text-slate-400 leading-normal">
+            No API key is required to explore the full map and telemetry. The app automatically runs high-precision Leaflet &amp; OpenStreetMap cartography out-of-the-box.
           </p>
         </div>
 

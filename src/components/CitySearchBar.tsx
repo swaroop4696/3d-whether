@@ -232,9 +232,9 @@ export const CitySearchBar: React.FC<CitySearchBarProps> = ({
                   </div>
                 </div>
                 <div className="text-[11px] font-mono text-sky-300/80 shrink-0 flex items-center gap-1">
-                  <Compass className="w-3 h-3 text-sky-400/60" />
+                  <Compass className="w-3.5 h-3.5 text-sky-400/60" />
                   <span>
-                    {r.lat.toFixed(3)}°, {r.lon.toFixed(3)}°
+                    {(r.lat ?? 0).toFixed(3)}°, {(r.lon ?? 0).toFixed(3)}°
                   </span>
                 </div>
               </button>

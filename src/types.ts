@@ -108,6 +108,9 @@ export interface EarthquakeData {
   tsunami: number;
   status: string;
   url: string;
+  felt?: number | null;
+  mmi?: number | null;
+  alert?: string | null;
 }
 
 export interface LiveFlight {
@@ -123,6 +126,8 @@ export interface LiveFlight {
 }
 
 export type IntelligenceLayerType = 'fires' | 'earthquakes' | 'flights';
+
+export type MeshIntelMode = 'flights' | 'fires' | 'earthquakes';
 
 export type ViewModeType = 'globe' | 'godseye3d' | 'roadmap' | 'streetview';
 
@@ -142,3 +147,67 @@ export interface SpatialCopilotAction {
   };
   insights?: string;
 }
+
+export type EmissionSourceType =
+  | 'agricultural_stubble'
+  | 'industrial_smokestack'
+  | 'garbage_burning'
+  | 'construction_dust'
+  | 'vehicular_smog'
+  | 'brick_kiln';
+
+export interface CitizenEmissionReport {
+  id: string;
+  timestamp: number;
+  sourceType: EmissionSourceType;
+  title: string;
+  description: string;
+  lat: number;
+  lon: number;
+  locationName: string;
+  state: string;
+  corridorId?: string;
+  imageUrl?: string;
+  sensorReadings?: {
+    pm25?: number;
+    pm10?: number;
+    voc?: number;
+  };
+  aiVerification?: {
+    verified: boolean;
+    confidenceScore: number;
+    severityScore: number; // 1 - 100
+    detectedPlumeType: string;
+    estimatedPm25Spike: number; // µg/m³
+    aiReasoning: string;
+  };
+  status: 'reported' | 'ai_verified' | 'authority_dispatched' | 'mitigated';
+  reportedBy: string;
+  authorityNoticeSentTo?: string;
+}
+
+export interface EconomicCorridor {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  lengthKm: number;
+  statesCovered: string[];
+  keyCities: { name: string; lat: number; lon: number; aqi: number }[];
+  currentAverageAqi: number;
+  predictedAqi24h: number;
+  predictedAqi48h: number;
+  predictedAqi72h: number;
+  dominantPollutant: string;
+  grapStage: 'Stage I (Poor)' | 'Stage II (Very Poor)' | 'Stage III (Severe)' | 'Stage IV (Severe+)';
+  stubbleBurnRisk: 'Low' | 'Moderate' | 'High' | 'Extreme';
+  activeInterventions: string[];
+  federatedNodes: {
+    state: string;
+    leadAgency: string;
+    deployedSmogGuns: number;
+    mechanizedSweepers: number;
+    interStateAlertStatus: 'normal' | 'yellow_alert' | 'red_alert';
+  }[];
+}
+

@@ -72,58 +72,67 @@ export const StreetViewPanoramaView: React.FC<StreetViewPanoramaViewProps> = ({
         setHasPanoError(false);
         const streetViewService = new window.google.maps.StreetViewService();
 
-        streetViewService.getPanorama(
-          {
-            location: { lat, lng: lon },
-            radius: 100,
-            // Mandatory attribution from Google Maps Platform Skill
-            // @ts-expect-error internal tracking property
-            internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
-          },
-          (data, status) => {
-            if (status === window.google.maps.StreetViewStatus.OK && data?.location?.latLng) {
-              if (!containerRef.current) return;
+        // Progressive search: first local 2,500m, expanding to 50,000m if needed
+        const searchPanorama = (searchRadius: number) => {
+          streetViewService.getPanorama(
+            {
+              location: { lat, lng: lon },
+              radius: searchRadius,
+              preference: window.google.maps.StreetViewPreference.NEAREST,
+              // Mandatory attribution from Google Maps Platform Skill
+              // @ts-expect-error internal tracking property
+              internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
+            },
+            (data, status) => {
+              if (status === window.google.maps.StreetViewStatus.OK && data?.location?.latLng) {
+                if (!containerRef.current) return;
 
-              const pano = new window.google.maps.StreetViewPanorama(containerRef.current, {
-                position: data.location.latLng,
-                pov: { heading: 165, pitch: 0 },
-                zoom: 1,
-                addressControl: false,
-                fullscreenControl: false,
-                linksControl: true,
-                panControl: true,
-                enableCloseButton: false,
-                motionTracking: false,
-                // Mandatory solution attribution ID
-                // @ts-expect-error internal tracking property
-                internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
-              });
+                const pano = new window.google.maps.StreetViewPanorama(containerRef.current, {
+                  position: data.location.latLng,
+                  pov: { heading: 165, pitch: 0 },
+                  zoom: 1,
+                  addressControl: false,
+                  fullscreenControl: false,
+                  linksControl: true,
+                  panControl: true,
+                  enableCloseButton: false,
+                  motionTracking: false,
+                  // Mandatory solution attribution ID
+                  // @ts-expect-error internal tracking property
+                  internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
+                });
 
-              pano.addListener('pov_changed', () => {
-                const currentPov = pano.getPov();
-                if (currentPov) {
-                  setHeading(Math.round(currentPov.heading));
-                  setPitch(Math.round(currentPov.pitch));
-                }
-              });
+                pano.addListener('pov_changed', () => {
+                  const currentPov = pano.getPov();
+                  if (currentPov) {
+                    setHeading(Math.round(currentPov.heading));
+                    setPitch(Math.round(currentPov.pitch));
+                  }
+                });
 
-              pano.addListener('position_changed', () => {
-                const pos = pano.getPosition();
-                if (pos && onLocationChanged) {
-                  const newLat = Math.round(pos.lat() * 10000) / 10000;
-                  const newLon = Math.round(pos.lng() * 10000) / 10000;
-                  onLocationChanged(newLat, newLon);
-                }
-              });
+                pano.addListener('position_changed', () => {
+                  const pos = pano.getPosition();
+                  if (pos && onLocationChanged) {
+                    const newLat = Math.round(pos.lat() * 10000) / 10000;
+                    const newLon = Math.round(pos.lng() * 10000) / 10000;
+                    onLocationChanged(newLat, newLon);
+                  }
+                });
 
-              panoramaRef.current = pano;
-              setIsNativePanoActive(true);
-            } else {
-              // Fallback to Google Street View embed iframe
-              setIsNativePanoActive(false);
+                panoramaRef.current = pano;
+                setIsNativePanoActive(true);
+              } else if (searchRadius < 50000) {
+                // Broaden search to 50km to capture regional highway or connecting corridor
+                searchPanorama(50000);
+              } else {
+                // Fallback to Google Street View embed iframe
+                setIsNativePanoActive(false);
+              }
             }
-          }
-        );
+          );
+        };
+
+        searchPanorama(2500);
       } catch (err) {
         console.warn('Native Street View initialization note:', err);
         setIsNativePanoActive(false);

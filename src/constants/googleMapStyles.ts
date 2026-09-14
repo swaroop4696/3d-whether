@@ -10,26 +10,32 @@ export const darkMinimalistMapStyles: google.maps.MapTypeStyle[] = [
     stylers: [{ color: '#090d16' }],
   },
   {
-    elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#64748b' }],
+    stylers: [{ color: '#cbd5e1' }],
   },
   {
     elementType: 'labels.text.stroke',
     stylers: [{ color: '#090d16' }, { weight: 3 }],
   },
   {
-    featureType: 'administrative',
-    elementType: 'geometry',
-    stylers: [{ color: '#1e293b' }, { weight: 0.8 }],
+    featureType: 'administrative.country',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#38bdf8' }, { weight: 1.2 }],
   },
   {
     featureType: 'administrative.country',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#94a3b8' }],
+    stylers: [{ color: '#e2e8f0' }],
+  },
+  {
+    featureType: 'administrative.province',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#0284c7' }, { weight: 1 }],
+  },
+  {
+    featureType: 'administrative.province',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#bae6fd' }],
   },
   {
     featureType: 'administrative.locality',
@@ -37,23 +43,74 @@ export const darkMinimalistMapStyles: google.maps.MapTypeStyle[] = [
     stylers: [{ color: '#38bdf8' }],
   },
   {
-    featureType: 'poi',
-    stylers: [{ visibility: 'simplified' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'geometry',
-    stylers: [{ color: '#0f172a' }],
-  },
-  {
-    featureType: 'poi',
+    featureType: 'administrative.neighborhood',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#475569' }],
+    stylers: [{ color: '#93c5fd' }],
   },
+  // Religious centers & places of worship (temples, churches, mosques, shrines)
+  {
+    featureType: 'poi.place_of_worship',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.place_of_worship',
+    elementType: 'labels.icon',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.place_of_worship',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#fbbf24' }],
+  },
+  // Shops, retail, restaurants, and businesses
+  {
+    featureType: 'poi.business',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'labels.icon',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#67e8f9' }],
+  },
+  // Tourist attractions & landmarks
+  {
+    featureType: 'poi.attraction',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.attraction',
+    elementType: 'labels.icon',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.attraction',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#f472b6' }],
+  },
+  // Parks & recreation
   {
     featureType: 'poi.park',
     elementType: 'geometry',
-    stylers: [{ color: '#0c1a29' }],
+    stylers: [{ color: '#09231f' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#86efac' }],
+  },
+  // Government & schools
+  {
+    featureType: 'poi.government',
+    stylers: [{ visibility: 'on' }],
+  },
+  {
+    featureType: 'poi.school',
+    stylers: [{ visibility: 'on' }],
   },
   {
     featureType: 'road',

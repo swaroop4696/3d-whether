@@ -26,8 +26,7 @@ interface SpatialCopilotBarProps {
 const QUICK_PROMPTS = [
   { label: 'Wildfires', icon: Flame, prompt: 'Fly to active wildfire hotspots with NASA thermal sensors', color: 'text-orange-400' },
   { label: 'Earthquakes', icon: Activity, prompt: 'Show seismic earthquake epicenters along tectonic faults', color: 'text-amber-400' },
-  { label: 'Live Flights', icon: Plane, prompt: 'Track commercial aircraft vectors on OpenSky', color: 'text-sky-400' },
-  { label: '3D Cities', icon: Building2, prompt: 'Enter 3D God\'s Eye Photorealistic Tiles in San Francisco', color: 'text-emerald-400' },
+  { label: '3D Cities', icon: Building2, prompt: 'Enter 3D tactical inspection in San Francisco', color: 'text-emerald-400' },
   { label: 'Road Traffic', icon: Route, prompt: 'Inspect 2D road cartography and live traffic congestion in Tokyo', color: 'text-indigo-400' },
 ];
 
@@ -53,6 +52,7 @@ export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
       const res = await fetch('/api/gemini/spatial-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(9000),
         body: JSON.stringify({
           prompt: query,
           currentContext: {
@@ -73,14 +73,73 @@ export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
       onExecuteAction(actionData);
       setPrompt('');
     } catch (err: any) {
-      console.error('[CopilotBar] Request error:', err);
+      console.warn('[CopilotBar] Request notice, using spatial intelligence fallback:', err?.message || err);
       // Fallback deterministic action
-      const fallback: SpatialCopilotAction = {
+      const lower = query.toLowerCase();
+      let fallback: SpatialCopilotAction = {
         replyText: 'Spatial copilot locked onto your navigation vector.',
         action: 'none',
       };
+
+      if (lower.includes('fire') || lower.includes('wildfire')) {
+        fallback = {
+          replyText: 'Routing to California Wildfire Complex. Thermal infrared sensors active.',
+          action: 'flyTo',
+          targetLocation: { name: 'California Wildfire Complex', lat: 39.842, lon: -121.583, zoom: 7 },
+          layerToggle: { layer: 'fires', enabled: true },
+          insights: 'NASA FIRMS VIIRS satellite thermal detection active.',
+        };
+      } else if (lower.includes('quake') || lower.includes('seismic') || lower.includes('earthquake')) {
+        fallback = {
+          replyText: 'Routing to Pacific Seismic Belt near Tokyo. Real-time USGS feed active.',
+          action: 'flyTo',
+          targetLocation: { name: 'Tokyo Bay Seismic Zone', lat: 35.6762, lon: 139.6503, zoom: 6 },
+          layerToggle: { layer: 'earthquakes', enabled: true },
+          insights: 'Real-time seismic feed active with depth profile.',
+        };
+      } else if (lower.includes('flight') || lower.includes('plane') || lower.includes('aircraft')) {
+        fallback = {
+          replyText: 'Toggling live commercial flights and aircraft transponders from OpenSky Network.',
+          action: 'toggleLayer',
+          layerToggle: { layer: 'flights', enabled: true },
+          insights: 'High-altitude airspace telemetry active.',
+        };
+      } else if (lower.includes('3d') || lower.includes('gods eye') || lower.includes("god's eye") || lower.includes('mesh')) {
+        fallback = {
+          replyText: "Switching to God's Eye 3D Photorealistic mesh mode.",
+          action: 'setMode',
+          mode: 'godseye3d',
+          targetLocation: { name: 'San Francisco Financial District', lat: 37.7915, lon: -122.3995, zoom: 16 },
+        };
+      } else if (lower.includes('road') || lower.includes('traffic') || lower.includes('map')) {
+        fallback = {
+          replyText: 'Switching to 2D Road Map with live traffic flow cartography.',
+          action: 'setMode',
+          mode: 'roadmap',
+        };
+      } else if (lower.includes('tokyo')) {
+        fallback = {
+          replyText: 'Navigating to Tokyo, Japan.',
+          action: 'flyTo',
+          targetLocation: { name: 'Tokyo, Japan', lat: 35.6762, lon: 139.6503, zoom: 11 },
+        };
+      } else if (lower.includes('paris')) {
+        fallback = {
+          replyText: 'Flying to Paris, France.',
+          action: 'flyTo',
+          targetLocation: { name: 'Paris, France', lat: 48.8566, lon: 2.3522, zoom: 12 },
+        };
+      } else if (lower.includes('new york') || lower.includes('nyc')) {
+        fallback = {
+          replyText: 'Flying to New York City.',
+          action: 'flyTo',
+          targetLocation: { name: 'New York, USA', lat: 40.7128, lon: -74.006, zoom: 12 },
+        };
+      }
+
       setLatestResponse(fallback);
       onExecuteAction(fallback);
+      setPrompt('');
     } finally {
       setIsLoading(false);
     }

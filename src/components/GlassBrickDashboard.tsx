@@ -140,7 +140,9 @@ export const GlassBrickDashboard: React.FC<GlassBrickDashboardProps> = ({
               <div className="flex items-center gap-2 text-xs font-mono text-sky-400 uppercase tracking-wider">
                 <Compass className="w-3.5 h-3.5 animate-spin-slow" />
                 <span>
-                  {weather ? `${weather.lat.toFixed(2)}°N, ${weather.lon.toFixed(2)}°E` : 'Locating...'}
+                  {typeof weather?.lat === 'number' && typeof weather?.lon === 'number'
+                    ? `${weather.lat.toFixed(2)}°N, ${weather.lon.toFixed(2)}°E`
+                    : 'Locating...'}
                 </span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mt-1 font-['Space_Grotesk']">
@@ -462,7 +464,9 @@ export const GlassBrickDashboard: React.FC<GlassBrickDashboardProps> = ({
             <span className="font-mono text-slate-300">Fresnel Shader Active</span>
           </div>
           <div className="font-mono text-[11px] text-sky-400">
-            {weather ? `LAT ${weather.lat.toFixed(2)} / LON ${weather.lon.toFixed(2)}` : 'READY'}
+            {typeof weather?.lat === 'number' && typeof weather?.lon === 'number'
+              ? `LAT ${weather.lat.toFixed(2)} / LON ${weather.lon.toFixed(2)}`
+              : 'READY'}
           </div>
         </div>
       </div>

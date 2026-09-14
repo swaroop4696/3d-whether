@@ -19,7 +19,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   className = '',
 }) => {
   const [displayValue, setDisplayValue] = useState<string>(() => {
-    if (value === null || value === undefined || isNaN(value)) return '--';
+    if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) return '--';
     return `${prefix}${value.toFixed(decimals)}${suffix}`;
   });
 
@@ -28,7 +28,7 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
   });
 
   useEffect(() => {
-    if (value === null || value === undefined || isNaN(value)) {
+    if (value === null || value === undefined || typeof value !== 'number' || isNaN(value)) {
       setDisplayValue('--');
       return;
     }
@@ -39,7 +39,8 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
       duration,
       ease: 'power2.out',
       onUpdate: () => {
-        setDisplayValue(`${prefix}${valueRef.current.val.toFixed(decimals)}${suffix}`);
+        const currentVal = typeof valueRef.current?.val === 'number' && !isNaN(valueRef.current.val) ? valueRef.current.val : 0;
+        setDisplayValue(`${prefix}${currentVal.toFixed(decimals)}${suffix}`);
       },
     });
   }, [value, decimals, prefix, suffix, duration]);

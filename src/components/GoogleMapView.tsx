@@ -31,6 +31,7 @@ import {
   Sparkles,
   Maximize2,
   Minimize2,
+  Globe,
 } from 'lucide-react';
 import {
   loadGoogleMapsScript,
@@ -52,7 +53,7 @@ interface GoogleMapViewProps {
   onToggleStreetView?: (open: boolean) => void;
 }
 
-export type TileLayerType = 'streets' | 'voyager' | 'hybrid' | 'daylight';
+export type TileLayerType = 'voyager' | 'hybrid' | 'dark' | 'daylight' | 'streets';
 
 interface TileConfig {
   id: TileLayerType;
@@ -66,49 +67,60 @@ interface TileConfig {
 }
 
 const TILE_CONFIGS: Record<TileLayerType, TileConfig> = {
-  streets: {
-    id: 'streets',
-    name: 'Street Roads (OSM)',
-    badge: 'Full Road Detail',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-    description: 'Every street, avenue, alleyway, lane, and road label',
-  },
   voyager: {
     id: 'voyager',
     name: 'Urban Street Roads',
-    badge: 'High-Vis Vector',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CARTO &copy; OpenStreetMap',
-    maxZoom: 20,
-    subdomains: 'abcd',
-    description: 'Modern vibrant roads, expressways, and avenue labels',
+    badge: 'High-Vis Streets',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, HERE, Garmin, USGS, NGA',
+    maxZoom: 19,
+    description: 'Ultra-crisp modern street roads, expressways, pedestrian ways, and avenues',
   },
   hybrid: {
     id: 'hybrid',
-    name: 'Satellite + Roads',
+    name: 'Satellite + Live Roads',
     badge: 'Aerial Hybrid',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri, Maxar, Earthstar Geographics',
     maxZoom: 19,
-    description: 'Photorealistic satellite aerial imagery overlaid with road network',
+    description: 'Photorealistic high-resolution satellite imagery overlaid with glowing road network',
+  },
+  dark: {
+    id: 'dark',
+    name: 'Night Tactical Vector',
+    badge: 'Dark Mode',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, HERE, Garmin',
+    maxZoom: 16,
+    description: 'Tactical high-contrast road network on sleek dark luxury canvas',
   },
   daylight: {
     id: 'daylight',
-    name: 'Daylight High-Contrast Roads',
-    badge: 'Pure Day',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CARTO &copy; OpenStreetMap',
-    maxZoom: 20,
-    subdomains: 'abcd',
-    description: 'Crisp daytime high-contrast road network and avenue labels',
+    name: 'Daylight Clean Roads',
+    badge: 'Humanitarian OSM',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team',
+    maxZoom: 19,
+    subdomains: 'abc',
+    description: 'Crisp daytime high-contrast road network, avenues, and terrain features',
+  },
+  streets: {
+    id: 'streets',
+    name: 'OpenStreetMap Classic',
+    badge: 'Full Road Detail',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+    subdomains: 'abc',
+    description: 'Classic OpenStreetMap street, avenue, alleyway, and road label registry',
   },
 };
 
 // Esri World Transportation dedicated road & street overlay tile service
 const TRANSPORTATION_ROADS_OVERLAY =
   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
+const DARK_REFERENCE_OVERLAY =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
 
 export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   lat,
@@ -139,8 +151,8 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   const leafletMarkerRef = useRef<L.Marker | null>(null);
 
   const [mapEngine, setMapEngine] = useState<'leaflet' | 'google'>('leaflet');
-  // Default directly to 'streets' so street roads are front and center!
-  const [activeLayer, setActiveLayer] = useState<TileLayerType>('streets');
+  // Default to ultra-crisp modern vector street roads ('voyager')
+  const [activeLayer, setActiveLayer] = useState<TileLayerType>('voyager');
   const [showRoadOverlay, setShowRoadOverlay] = useState<boolean>(true);
   const [showTraffic, setShowTraffic] = useState<boolean>(true);
   const [showTransit, setShowTransit] = useState<boolean>(false);
@@ -166,6 +178,23 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
 
   const [showAqiMatrix, setShowAqiMatrix] = useState(false);
 
+  // Guard against accidental early zoom transitions while map is initially mounting
+  const isMapSettledRef = useRef(false);
+  const isHandoffTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (isVisible) {
+      isHandoffTriggeredRef.current = false;
+      const t = setTimeout(() => {
+        isMapSettledRef.current = true;
+      }, 700);
+      return () => clearTimeout(t);
+    } else {
+      isMapSettledRef.current = false;
+      isHandoffTriggeredRef.current = false;
+    }
+  }, [isVisible]);
+
   const [hierarchy, setHierarchy] = useState<{
     road?: string;
     houseNumber?: string;
@@ -179,28 +208,43 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
 
   const targetLat = lat ?? 40.7128;
   const targetLon = lon ?? -74.006;
+  const targetLatRef = useRef(targetLat);
+  const targetLonRef = useRef(targetLon);
+  targetLatRef.current = targetLat;
+  targetLonRef.current = targetLon;
+  const cityNameRef = useRef(cityName);
+  cityNameRef.current = cityName;
 
-  // Stable callback reference
+  // Stable callback references
   const onLocationSelectedRef = useRef(onLocationSelected);
   useEffect(() => {
     onLocationSelectedRef.current = onLocationSelected;
   }, [onLocationSelected]);
+
+  const onReturnToOrbitRef = useRef(onReturnToOrbit);
+  useEffect(() => {
+    onReturnToOrbitRef.current = onReturnToOrbit;
+  }, [onReturnToOrbit]);
 
   /**
    * Helper: Attach or detach the transportation road overlay
    */
   const updateRoadOverlay = useCallback(
     (map: L.Map, layerType: TileLayerType, enabled: boolean) => {
-      // In hybrid or daylight mode, or whenever enabled, ensure transportation roads are sharp
-      const shouldHaveOverlay =
-        enabled && (layerType === 'hybrid' || layerType === 'daylight');
-
       if (leafletRoadOverlayRef.current) {
         map.removeLayer(leafletRoadOverlayRef.current);
         leafletRoadOverlayRef.current = null;
       }
 
-      if (shouldHaveOverlay) {
+      if (!enabled) return;
+
+      if (layerType === 'dark') {
+        const darkRefLayer = L.tileLayer(DARK_REFERENCE_OVERLAY, {
+          maxZoom: 16,
+          opacity: 0.95,
+        }).addTo(map);
+        leafletRoadOverlayRef.current = darkRefLayer;
+      } else if (layerType === 'hybrid') {
         const roadLayer = L.tileLayer(TRANSPORTATION_ROADS_OVERLAY, {
           maxZoom: 19,
           opacity: 0.95,
@@ -217,17 +261,25 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   const initLeafletMap = useCallback(() => {
     if (!leafletContainerRef.current) return;
 
+    // If map already exists, simply reposition it smoothly and ensure full layout
     if (leafletMapRef.current) {
-      leafletMapRef.current.remove();
-      leafletMapRef.current = null;
+      leafletMapRef.current.setView([targetLatRef.current, targetLonRef.current], 16);
+      if (leafletMarkerRef.current) {
+        leafletMarkerRef.current.setLatLng([targetLatRef.current, targetLonRef.current]);
+      }
+      leafletMapRef.current.invalidateSize();
+      return;
     }
 
     const map = L.map(leafletContainerRef.current, {
-      center: [targetLat, targetLon],
+      center: [targetLatRef.current, targetLonRef.current],
       zoom: 16,
+      minZoom: 8,
+      maxZoom: 20,
       zoomControl: false,
       attributionControl: false,
-      maxZoom: 20,
+      worldCopyJump: false,
+      maxBoundsViscosity: 1.0,
     });
 
     const tileConfig = TILE_CONFIGS[activeLayer];
@@ -256,7 +308,7 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       iconAnchor: [18, 18],
     });
 
-    const marker = L.marker([targetLat, targetLon], {
+    const marker = L.marker([targetLatRef.current, targetLonRef.current], {
       icon: customIcon,
       draggable: true,
     }).addTo(map);
@@ -279,12 +331,30 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       onLocationSelectedRef.current(roundedLat, roundedLon);
     });
 
-    map.on('zoomend', () => {
-      setCurrentZoom(map.getZoom());
+    const checkLeafletZoomHandoff = () => {
+      const z = map.getZoom();
+      setCurrentZoom(z);
+      // If user zooms out past regional scale, immediately return to 3D planetary Earth
+      if (z <= 8) {
+        onReturnToOrbitRef.current();
+      }
+    };
+
+    map.on('zoom', () => {
+      const z = map.getZoom();
+      setCurrentZoom(z);
+      if (z <= 8) {
+        onReturnToOrbitRef.current();
+      }
     });
 
+    map.on('zoomend', checkLeafletZoomHandoff);
+
     leafletMapRef.current = map;
-  }, [targetLat, targetLon, activeLayer, showRoadOverlay, updateRoadOverlay]);
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 50);
+  }, [activeLayer, showRoadOverlay, updateRoadOverlay]);
 
   /**
    * 2. Initialize Google Maps JavaScript API (if key is configured)
@@ -304,10 +374,21 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       return;
     }
 
+    if (googleMapInstanceRef.current) {
+      googleMapInstanceRef.current.setCenter({ lat: targetLatRef.current, lng: targetLonRef.current });
+      googleMapInstanceRef.current.setZoom(16);
+      if (googleMarkerRef.current) {
+        googleMarkerRef.current.setPosition({ lat: targetLatRef.current, lng: targetLonRef.current });
+      }
+      return;
+    }
+
     try {
       const map = new window.google.maps.Map(mapElementRef.current, {
-        center: { lat: targetLat, lng: targetLon },
+        center: { lat: targetLatRef.current, lng: targetLonRef.current },
         zoom: 16,
+        minZoom: 8,
+        maxZoom: 21,
         styles: darkMinimalistMapStyles,
         disableDefaultUI: true,
         zoomControl: false,
@@ -317,14 +398,14 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
         backgroundColor: '#090d16',
         gestureHandling: 'greedy',
         // Mandatory solution attribution ID per Google Maps Platform Code Assist
-        internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
+        internalUsageAttributionIds: ['gmp_mcp_codeassist_v1_aistudio'],
       });
 
       // Target Pin
       const marker = new window.google.maps.Marker({
-        position: { lat: targetLat, lng: targetLon },
+        position: { lat: targetLatRef.current, lng: targetLonRef.current },
         map: map,
-        title: cityName || 'Selected Location',
+        title: cityNameRef.current || 'Selected Location',
         draggable: true,
       });
 
@@ -369,7 +450,11 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       });
 
       map.addListener('zoom_changed', () => {
-        setCurrentZoom(map.getZoom() ?? 16);
+        const z = map.getZoom() ?? 16;
+        setCurrentZoom(z);
+        if (z <= 8) {
+          onReturnToOrbitRef.current();
+        }
       });
 
       googleMapInstanceRef.current = map;
@@ -378,7 +463,7 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       setMapEngine('leaflet');
       initLeafletMap();
     }
-  }, [targetLat, targetLon, initLeafletMap, showTraffic, showTransit, showBicycling, cityName]);
+  }, [initLeafletMap, showTraffic, showTransit, showBicycling]);
 
   // Synchronize Google Traffic Layer state
   useEffect(() => {
@@ -407,7 +492,7 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
     }
   }, [showBicycling, mapEngine]);
 
-  // Initial setup
+  // Initial setup (mounted once)
   useEffect(() => {
     const apiKey = getGoogleMapsApiKey();
     if (apiKey) {
@@ -416,19 +501,51 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       setMapEngine('leaflet');
       initLeafletMap();
     }
-  }, [initGoogleMap, initLeafletMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Handle center updates smoothly across both engines
+  // Handle center updates smoothly across both engines without rebuilding maps
   useEffect(() => {
-    if (mapEngine === 'google' && googleMapInstanceRef.current && lat !== null && lon !== null) {
+    if (lat === null || lon === null) return;
+    if (mapEngine === 'google' && googleMapInstanceRef.current) {
       googleMapInstanceRef.current.panTo({ lat, lng: lon });
-    } else if (mapEngine === 'leaflet' && leafletMapRef.current && lat !== null && lon !== null) {
-      leafletMapRef.current.flyTo([lat, lon], leafletMapRef.current.getZoom(), { duration: 0.8 });
+      googleMapInstanceRef.current.setZoom(16);
+      if (googleMarkerRef.current) {
+        googleMarkerRef.current.setPosition({ lat, lng: lon });
+      }
+    } else if (mapEngine === 'leaflet' && leafletMapRef.current) {
+      leafletMapRef.current.setView([lat, lon], 16);
       if (leafletMarkerRef.current) {
         leafletMarkerRef.current.setLatLng([lat, lon]);
       }
+      leafletMapRef.current.invalidateSize();
     }
   }, [lat, lon, mapEngine]);
+
+  // When map becomes visible, invalidate size to guarantee crisp rendering with zero black boxes
+  useEffect(() => {
+    if (isVisible) {
+      const t1 = setTimeout(() => {
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize();
+        }
+        if (googleMapInstanceRef.current && window.google?.maps) {
+          window.google.maps.event.trigger(googleMapInstanceRef.current, 'resize');
+        }
+      }, 50);
+
+      const t2 = setTimeout(() => {
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize();
+        }
+      }, 250);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [isVisible]);
 
   // Layer change handler
   const handleLayerChange = (layer: TileLayerType) => {
@@ -448,8 +565,13 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
     } else if (mapEngine === 'google' && googleMapInstanceRef.current) {
       if (layer === 'hybrid') {
         googleMapInstanceRef.current.setMapTypeId(google.maps.MapTypeId.HYBRID);
+        googleMapInstanceRef.current.setOptions({ styles: null });
+      } else if (layer === 'daylight') {
+        googleMapInstanceRef.current.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+        googleMapInstanceRef.current.setOptions({ styles: null });
       } else {
         googleMapInstanceRef.current.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+        googleMapInstanceRef.current.setOptions({ styles: darkMinimalistMapStyles });
       }
     }
   };
@@ -471,38 +593,20 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
 
     async function fetchStreetHierarchy() {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
-          { headers: { 'User-Agent': 'GeoAtmosphere-3D-StreetRoads/2.0' } }
-        );
+        const res = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (cancelled || !data?.address) return;
-
-        const roadName =
-          data.address.road ||
-          data.address.pedestrian ||
-          data.address.highway ||
-          data.address.footway ||
-          data.address.path ||
-          data.address.street;
-
-        const district =
-          data.address.district ||
-          data.address.suburb ||
-          data.address.city_district ||
-          data.address.neighbourhood ||
-          data.address.quarter;
+        if (cancelled || !data) return;
 
         setHierarchy({
-          road: roadName,
-          houseNumber: data.address.house_number,
-          district: district,
-          neighbourhood: data.address.neighbourhood || data.address.suburb,
-          city: data.address.city || data.address.town || data.address.village || data.address.municipality,
-          state: data.address.state || data.address.region,
-          postcode: data.address.postcode,
-          country: data.address.country,
+          road: data.road,
+          houseNumber: data.houseNumber,
+          district: data.district,
+          neighbourhood: data.neighbourhood,
+          city: data.city,
+          state: data.state,
+          postcode: data.postcode,
+          country: data.country,
         });
       } catch {
         // Fail quietly
@@ -547,12 +651,60 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   };
 
   const handleZoomOut = () => {
+    if (currentZoom <= 9) {
+      onReturnToOrbit();
+      return;
+    }
     if (mapEngine === 'google' && googleMapInstanceRef.current) {
-      googleMapInstanceRef.current.setZoom((googleMapInstanceRef.current.getZoom() ?? 16) - 1);
+      const current = googleMapInstanceRef.current.getZoom() ?? 16;
+      if (current <= 9) {
+        onReturnToOrbit();
+      } else {
+        googleMapInstanceRef.current.setZoom(current - 1);
+      }
     } else if (mapEngine === 'leaflet' && leafletMapRef.current) {
-      leafletMapRef.current.zoomOut();
+      const current = leafletMapRef.current.getZoom();
+      if (current <= 9) {
+        onReturnToOrbit();
+      } else {
+        leafletMapRef.current.zoomOut();
+      }
     }
   };
+
+  // Intercept scroll-out when zooming past regional level to seamlessly return to 3D planetary Earth
+  useEffect(() => {
+    const el = leafletContainerRef.current || mapElementRef.current;
+    if (!el || !isVisible) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY > 0 && currentZoom <= 9) {
+        onReturnToOrbit();
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [isVisible, currentZoom, onReturnToOrbit]);
+
+  // Escape Key: returns to 3D Earth Globe when user explicitly requests
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onReturnToOrbit();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isVisible, onReturnToOrbit]);
 
   const activeRoadDisplay = hierarchy?.road
     ? `${hierarchy.road}${hierarchy.houseNumber ? ` #${hierarchy.houseNumber}` : ''}`
@@ -583,6 +735,21 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
             mapEngine === 'leaflet' ? 'opacity-100 z-10' : 'opacity-0 -z-10 pointer-events-none'
           }`}
         />
+
+        {/* Return to 3D Globe pill with scroll-out hint */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2">
+          <button
+            onClick={onReturnToOrbit}
+            title="Return to 3D Earth Globe (or scroll wheel out / press Esc)"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium text-white/90 hover:text-white bg-[#0c121e]/90 hover:bg-sky-500/20 border border-sky-400/50 shadow-2xl backdrop-blur-2xl transition-all cursor-pointer group active:scale-95"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-sky-400 group-hover:-rotate-90 transition-transform" />
+            <span>Return to 3D Globe</span>
+            <span className="text-[10px] font-mono text-sky-300 bg-sky-500/20 px-1.5 py-0.5 rounded border border-sky-400/30">
+              Scroll Out / Esc
+            </span>
+          </button>
+        </div>
 
         {/* 3. Floating Street Roads HUD Banner & Telemetry Card */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex flex-col items-center gap-2 max-w-sm w-[90%]">
@@ -880,11 +1047,11 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
           {/* Engine Switcher (Leaflet Precision vs Google Maps) */}
           <button
             onClick={() => setIsRestrictionsModalOpen(true)}
-            title="Manage Google Maps API Key & Restrictions"
+            title="Cartography Engine Status & Settings"
             className="pointer-events-auto hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-full weather-gpt-pill text-xs font-light tracking-wide transition-all shadow-lg active:scale-95 cursor-pointer border border-sky-400/25 bg-[#0c121e]/90 backdrop-blur-xl text-sky-300 hover:text-white"
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-sky-400" />
-            <span>{mapEngine === 'google' ? 'Google Maps Active' : 'Precision Engine'}</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{mapEngine === 'google' ? 'Google Maps' : 'Precision Engine'}</span>
           </button>
         </div>
 
@@ -928,10 +1095,14 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
           </button>
           <button
             onClick={handleZoomOut}
-            title="Zoom Out"
-            className="p-2.5 rounded-xl weather-gpt-pill text-white/80 hover:text-white hover:bg-white/10 transition-all shadow-lg active:scale-95 cursor-pointer bg-[#0c121e]/90 backdrop-blur-xl border border-white/10"
+            title={currentZoom <= 5 ? 'Return to 3D Earth Globe (or scroll wheel out)' : 'Zoom Out'}
+            className="p-2.5 rounded-xl weather-gpt-pill text-white/80 hover:text-white hover:bg-white/10 transition-all shadow-lg active:scale-95 cursor-pointer bg-[#0c121e]/90 backdrop-blur-xl border border-white/10 flex items-center justify-center group"
           >
-            <ZoomOut className="w-4 h-4" />
+            {currentZoom <= 5 ? (
+              <RotateCcw className="w-4 h-4 text-sky-400 group-hover:-rotate-90 transition-transform" />
+            ) : (
+              <ZoomOut className="w-4 h-4" />
+            )}
           </button>
         </div>
 

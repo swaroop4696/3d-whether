@@ -37,8 +37,8 @@ export const StreetMapView: React.FC<StreetMapViewProps> = ({
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     },
     voyager: {
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      attribution: '&copy; Esri &copy; OpenStreetMap contributors',
     },
   };
 
@@ -233,9 +233,9 @@ export const StreetMapView: React.FC<StreetMapViewProps> = ({
 
       {/* Bottom Left Telemetry Badge */}
       <div className="absolute bottom-6 left-6 z-[1000] flex items-center gap-3 px-3 py-1.5 rounded-full weather-gpt-pill text-[11px] text-white/60 font-mono">
-        <span>LAT: {lat.toFixed(4)}°</span>
+        <span>LAT: {(typeof lat === 'number' ? lat : 0).toFixed(4)}°</span>
         <span className="text-white/20">|</span>
-        <span>LON: {lon.toFixed(4)}°</span>
+        <span>LON: {(typeof lon === 'number' ? lon : 0).toFixed(4)}°</span>
         <span className="text-white/20">|</span>
         <span>ZOOM: {zoomLevel}x</span>
       </div>

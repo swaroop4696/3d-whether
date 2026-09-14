@@ -7,6 +7,9 @@ export type MapsLoadStatus = 'idle' | 'loading' | 'ready' | 'missing_key' | 'err
 let loadPromise: Promise<boolean> | null = null;
 let currentKeyUsed: string | null = null;
 
+let cachedServerKey: string | null = null;
+let hasCheckedServerKey = false;
+
 /**
  * Returns the configured Google Maps API Key from env or localStorage
  */
@@ -19,6 +22,11 @@ export function getGoogleMapsApiKey(): string {
     }
   }
 
+  // Fallback to cached server key if retrieved
+  if (cachedServerKey) {
+    return cachedServerKey;
+  }
+
   // Fallback to Vite environment variable
   const envKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || '';
   if (envKey && envKey !== 'YOUR_GOOGLE_MAPS_API_KEY') {
@@ -26,6 +34,28 @@ export function getGoogleMapsApiKey(): string {
   }
 
   return '';
+}
+
+/**
+ * Asynchronously checks if backend has a configured Maps API key
+ */
+export async function syncServerMapsKey(): Promise<string> {
+  if (hasCheckedServerKey && cachedServerKey) return cachedServerKey;
+  try {
+    const res = await fetch('/api/config/maps-key');
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.key) {
+        cachedServerKey = data.key.trim();
+        hasCheckedServerKey = true;
+        return cachedServerKey;
+      }
+    }
+  } catch {
+    // Ignore network failures
+  }
+  hasCheckedServerKey = true;
+  return getGoogleMapsApiKey();
 }
 
 /**

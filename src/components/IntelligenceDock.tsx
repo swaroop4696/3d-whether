@@ -76,24 +76,6 @@ export const IntelligenceDock: React.FC<IntelligenceDockProps> = ({
             </span>
           </button>
 
-          {/* Live Flights Quick Toggle */}
-          <button
-            id="toggle-layer-flights"
-            onClick={() => onToggleLayer('flights')}
-            title="Toggle OpenSky Live Aircraft Tracker"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-              activeLayers.flights
-                ? 'bg-sky-500/25 text-sky-300 border border-sky-500/40 shadow-sm'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            <Plane className={`w-3.5 h-3.5 ${activeLayers.flights ? 'text-sky-400' : 'text-neutral-500'}`} />
-            <span>Flights</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-200 font-mono">
-              {flights.length}
-            </span>
-          </button>
-
           {/* Expand/Collapse List Button */}
           <button
             id="btn-expand-intel-feed"
@@ -118,7 +100,7 @@ export const IntelligenceDock: React.FC<IntelligenceDockProps> = ({
                   <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
                   <span className="text-xs font-semibold text-white tracking-wide">Live Spatial Feeds</span>
                 </div>
-                <span className="text-[10px] font-mono text-neutral-400">NASA • USGS • OpenSky</span>
+                <span className="text-[10px] font-mono text-neutral-400">NASA • USGS</span>
               </div>
 
               {/* Feed Tabs */}
@@ -144,17 +126,6 @@ export const IntelligenceDock: React.FC<IntelligenceDockProps> = ({
                 >
                   <Activity className="w-3 h-3 text-amber-400" />
                   <span>Quakes ({earthquakes.length})</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('flights')}
-                  className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-                    activeTab === 'flights'
-                      ? 'bg-sky-500/30 text-sky-200 shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  <Plane className="w-3 h-3 text-sky-400" />
-                  <span>Flights ({flights.length})</span>
                 </button>
               </div>
             </div>
@@ -185,7 +156,7 @@ export const IntelligenceDock: React.FC<IntelligenceDockProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono">
-                        <span>{fire.country || `${fire.lat.toFixed(2)}°, ${fire.lon.toFixed(2)}°`}</span>
+                        <span>{fire.country || `${(fire.lat ?? 0).toFixed(2)}°, ${(fire.lon ?? 0).toFixed(2)}°`}</span>
                         <span>{fire.satellite}</span>
                       </div>
                     </button>
@@ -229,38 +200,6 @@ export const IntelligenceDock: React.FC<IntelligenceDockProps> = ({
                       </button>
                     );
                   })}
-                </>
-              )}
-
-              {activeTab === 'flights' && (
-                <>
-                  {flights.map((flight) => (
-                    <button
-                      key={flight.icao24}
-                      onClick={() => onSelectEvent(flight.lat, flight.lon, `Flight ${flight.callsign}`, 'flights')}
-                      className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${
-                        selectedEventId === flight.icao24
-                          ? 'bg-sky-500/30 border-sky-400 text-white'
-                          : 'bg-white/5 hover:bg-sky-500/15 border-white/5 hover:border-sky-500/30 text-neutral-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <Plane className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                          <span className="text-xs font-semibold text-sky-100">
-                            {flight.callsign}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono text-sky-300 bg-sky-500/20 px-1.5 py-0.5 rounded">
-                          {Math.round(flight.altitude * 3.28084).toLocaleString()} ft
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono">
-                        <span>{flight.originCountry}</span>
-                        <span>{Math.round(flight.velocity * 1.94384)} kts • {flight.heading}°</span>
-                      </div>
-                    </button>
-                  ))}
                 </>
               )}
             </div>

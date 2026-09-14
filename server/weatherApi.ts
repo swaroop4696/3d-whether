@@ -1,181 +1,65 @@
-import type {
-  WeatherData,
-  AqiData,
-  CitySearchResult,
-  WeatherParticleType,
-  LocationHierarchy,
-  PlaceCategory,
-} from '../types';
-
-// Optional custom key provided by user or environment
-let customOwmApiKey: string = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
-
-export function setCustomOwmKey(key: string) {
-  customOwmApiKey = key.trim();
+export interface LocationHierarchy {
+  road?: string;
+  houseNumber?: string;
+  roadType?: string;
+  neighbourhood?: string;
+  suburb?: string;
+  district?: string;
+  city?: string;
+  county?: string;
+  state?: string;
+  country?: string;
+  countryCode?: string;
+  postcode?: string;
+  fullHierarchy: string;
+  displayName: string;
+  placeType?: 'street' | 'district' | 'city' | 'landmark' | 'address';
 }
 
-export function getCustomOwmKey(): string {
-  return customOwmApiKey;
+export interface WeatherData {
+  city: string;
+  country: string;
+  lat: number;
+  lon: number;
+  temp: number;
+  feels_like: number;
+  temp_min: number;
+  temp_max: number;
+  humidity: number;
+  pressure: number;
+  wind_speed: number;
+  wind_deg: number;
+  weather_main: string;
+  weather_desc: string;
+  weather_icon: string;
+  clouds: number;
+  visibility: number;
+  sunrise?: number;
+  sunset?: number;
+  timezone?: number;
+  locationHierarchy?: LocationHierarchy;
 }
 
-/**
- * Converts wind degrees (0°-360°) to 16-point compass cardinal direction
- */
-export function getWindCardinal(deg: number): string {
-  const directions = [
-    'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
-  ];
-  const index = Math.round(((deg % 360) + 360) % 360 / 22.5) % 16;
-  return directions[index];
+export interface AqiData {
+  aqi: number;
+  usAqi: number;
+  label: string;
+  color: string;
+  description: string;
+  healthRecommendation: string;
+  outdoorActivityRating: string;
+  roadsideTrafficImpact: string;
+  dominantPollutant: string;
+  pm2_5: number;
+  pm10: number;
+  no2: number;
+  co: number;
+  so2: number;
+  o3: number;
+  nh3: number;
 }
 
-/**
- * Reverse geocodes exact coordinates into deep location hierarchy using Nominatim OpenStreetMap API:
- * Street/Road, Building Number, Road Type, Neighbourhood, Suburb, District, City, State, Country, Postal Code
- */
-export async function fetchLocationHierarchy(lat: number, lon: number): Promise<LocationHierarchy> {
-  // 1. Primary: Server Proxy Endpoint
-  try {
-    const proxyRes = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data && (data.displayName || data.fullHierarchy)) {
-        return data;
-      }
-    }
-  } catch {
-    // Continue to direct fetch
-  }
-
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const addr = data.address || {};
-
-      const road =
-        addr.road ||
-        addr.pedestrian ||
-        addr.footway ||
-        addr.street ||
-        addr.path ||
-        addr.highway ||
-        addr.avenue ||
-        addr.boulevard;
-
-      const houseNumber = addr.house_number;
-      const roadType = addr.highway || (road ? 'Street / Road' : undefined);
-      const neighbourhood = addr.neighbourhood || addr.quarter || addr.subdivision;
-      const suburb = addr.suburb || addr.residential || addr.city_district;
-      const district = addr.city_district || addr.district || addr.borough || addr.subdistrict || addr.county;
-      const city = addr.city || addr.town || addr.municipality || addr.village || addr.hamlet;
-      const county = addr.county || addr.state_district;
-      const state = addr.state || addr.region || addr.province || addr.state_code;
-      const country = addr.country || addr.country_name;
-      const countryCode = addr.country_code ? addr.country_code.toUpperCase() : undefined;
-      const postcode = addr.postcode;
-
-      let placeType: PlaceCategory = 'city';
-      if (road) placeType = 'street';
-      else if (district || suburb || neighbourhood) placeType = 'district';
-      else if (city) placeType = 'city';
-
-      // Build specific-to-broad hierarchy string
-      const roadDisplay = road ? (houseNumber ? `${road} #${houseNumber}` : road) : undefined;
-      const districtDisplay = district && district !== city ? district : (suburb || neighbourhood);
-
-      const hierarchyParts = [
-        roadDisplay,
-        districtDisplay,
-        city,
-        state && state !== city ? state : undefined,
-        country,
-      ].filter(Boolean);
-
-      const fullHierarchy = hierarchyParts.length > 0
-        ? hierarchyParts.join(', ')
-        : data.display_name || (typeof lat === 'number' && typeof lon === 'number' ? `${lat.toFixed(4)}°, ${lon.toFixed(4)}°` : 'Coordinates');
-
-      return {
-        road: roadDisplay,
-        houseNumber,
-        roadType,
-        neighbourhood,
-        suburb,
-        district,
-        city: city || (road ? undefined : district || state),
-        county,
-        state,
-        country,
-        countryCode,
-        postcode,
-        fullHierarchy,
-        displayName: data.display_name || fullHierarchy,
-        placeType,
-      };
-    }
-  } catch (err) {
-    console.warn('[Reverse Geocode] Nominatim query failed:', err);
-  }
-
-  // Fallback if ocean or offline
-  const safeLat = typeof lat === 'number' && !isNaN(lat) ? lat : 0;
-  const safeLon = typeof lon === 'number' && !isNaN(lon) ? lon : 0;
-  const isOcean = Math.abs(safeLat) < 70 && Math.abs(safeLon) > 170;
-  const fallbackDesc = isOcean
-    ? 'Maritime Coordinates'
-    : `Coordinates ${safeLat.toFixed(4)}°, ${safeLon.toFixed(4)}°`;
-
-  return {
-    fullHierarchy: fallbackDesc,
-    displayName: fallbackDesc,
-    placeType: 'landmark',
-  };
-}
-
-/**
- * Gets user's current GPS location via navigator.geolocation
- */
-export function getCurrentCoordinates(): Promise<{ lat: number; lon: number }> {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      resolve({ lat: 40.7128, lon: -74.006 });
-      return;
-    }
-
-    const options: PositionOptions = {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 60000,
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          lat: position.coords.latitude,
-          lon: position.coords.longitude,
-        });
-      },
-      (error) => {
-        console.warn('[Geolocation] GPS access denied or timed out:', error.message);
-        resolve({ lat: 40.7128, lon: -74.006 });
-      },
-      options
-    );
-  });
-}
-
-/**
- * Maps WMO weather code to standard descriptive condition
- */
-function mapWmoCode(code: number): { main: string; desc: string; icon: string } {
+export function mapWmoCode(code: number): { main: string; desc: string; icon: string } {
   if (code === 0) return { main: 'Clear', desc: 'Clear sky', icon: '01d' };
   if (code === 1) return { main: 'Clear', desc: 'Mainly clear', icon: '02d' };
   if (code === 2) return { main: 'Clouds', desc: 'Partly cloudy', icon: '03d' };
@@ -189,16 +73,10 @@ function mapWmoCode(code: number): { main: string; desc: string; icon: string } 
   return { main: 'Atmosphere', desc: 'Misty atmospheric haze', icon: '50d' };
 }
 
-/**
- * Helper to compute US EPA piecewise sub-index
- */
 function calcEpaSubIndex(c: number, bpLow: number, bpHigh: number, iLow: number, iHigh: number): number {
   return Math.round(((iHigh - iLow) / (bpHigh - bpLow)) * (c - bpLow) + iLow);
 }
 
-/**
- * Computes official US EPA AQI from PM2.5 (µg/m³)
- */
 export function calculateUsAqiFromPm25(pm25: number): number {
   if (pm25 <= 12.0) return calcEpaSubIndex(pm25, 0.0, 12.0, 0, 50);
   if (pm25 <= 35.4) return calcEpaSubIndex(pm25, 12.1, 35.4, 51, 100);
@@ -209,9 +87,6 @@ export function calculateUsAqiFromPm25(pm25: number): number {
   return calcEpaSubIndex(Math.min(pm25, 500.4), 350.5, 500.4, 401, 500);
 }
 
-/**
- * Computes comprehensive US EPA AQI, European AQI, Health recommendations, and Roadside impact
- */
 export function evaluateAirQuality(
   pm2_5: number,
   pm10: number,
@@ -219,21 +94,8 @@ export function evaluateAirQuality(
   co: number,
   so2: number,
   o3: number
-): {
-  aqi: number;
-  usAqi: number;
-  label: string;
-  color: string;
-  description: string;
-  healthRecommendation: string;
-  outdoorActivityRating: string;
-  roadsideTrafficImpact: string;
-  dominantPollutant: string;
-} {
-  // Compute sub-indices
+) {
   const aqiPm25 = calculateUsAqiFromPm25(pm2_5);
-  
-  // PM10 sub-index
   let aqiPm10 = 0;
   if (pm10 <= 54) aqiPm10 = calcEpaSubIndex(pm10, 0, 54, 0, 50);
   else if (pm10 <= 154) aqiPm10 = calcEpaSubIndex(pm10, 55, 154, 51, 100);
@@ -241,30 +103,25 @@ export function evaluateAirQuality(
   else if (pm10 <= 354) aqiPm10 = calcEpaSubIndex(pm10, 255, 354, 151, 200);
   else aqiPm10 = calcEpaSubIndex(Math.min(pm10, 504), 355, 504, 201, 300);
 
-  // NO2 traffic sub-index (1-hr in µg/m³)
   let aqiNo2 = 0;
   if (no2 <= 100) aqiNo2 = calcEpaSubIndex(no2, 0, 100, 0, 50);
   else if (no2 <= 188) aqiNo2 = calcEpaSubIndex(no2, 101, 188, 51, 100);
   else if (no2 <= 676) aqiNo2 = calcEpaSubIndex(no2, 189, 676, 101, 150);
   else aqiNo2 = 180;
 
-  // O3 sub-index
   let aqiO3 = 0;
   if (o3 <= 108) aqiO3 = calcEpaSubIndex(o3, 0, 108, 0, 50);
   else if (o3 <= 140) aqiO3 = calcEpaSubIndex(o3, 109, 140, 51, 100);
   else if (o3 <= 170) aqiO3 = calcEpaSubIndex(o3, 141, 170, 101, 150);
   else aqiO3 = 180;
 
-  // Maximum determines the overall US AQI
   const usAqi = Math.max(aqiPm25, aqiPm10, aqiNo2, aqiO3);
 
-  // Find dominant pollutant
   let dominantPollutant = 'PM2.5';
   if (usAqi === aqiNo2 && aqiNo2 > aqiPm25) dominantPollutant = 'NO₂ (Vehicular Traffic)';
   else if (usAqi === aqiO3 && aqiO3 > aqiPm25) dominantPollutant = 'Ozone (O₃)';
   else if (usAqi === aqiPm10 && aqiPm10 > aqiPm25) dominantPollutant = 'PM10 (Dust)';
 
-  // Roadside traffic impact assessment
   let roadsideTrafficImpact = 'Low roadside vehicle emissions. Clean air circulation along streets.';
   if (no2 > 50 || co > 1200) {
     roadsideTrafficImpact = 'Heavy vehicular exhaust and diesel particulate concentration along arterial roads.';
@@ -272,13 +129,12 @@ export function evaluateAirQuality(
     roadsideTrafficImpact = 'Moderate roadside vehicle traffic emissions detected along street corridors.';
   }
 
-  // Determine EPA categories, colors, and health recommendations
   if (usAqi <= 50) {
     return {
       aqi: 1,
       usAqi,
       label: 'Good',
-      color: '#10b981', // emerald-500
+      color: '#10b981',
       description: 'Air quality is satisfactory and poses little or no risk.',
       healthRecommendation: 'Ideal for all outdoor activities, running, cycling, and natural window ventilation.',
       outdoorActivityRating: 'Optimal for Outdoor Exertion',
@@ -291,7 +147,7 @@ export function evaluateAirQuality(
       aqi: 2,
       usAqi,
       label: 'Moderate',
-      color: '#eab308', // yellow-500
+      color: '#eab308',
       description: 'Air quality is acceptable. A small number of sensitive individuals may experience mild irritation.',
       healthRecommendation: 'Unusually sensitive individuals should reduce prolonged outdoor exertion along busy roadways.',
       outdoorActivityRating: 'Safe for General Public',
@@ -304,7 +160,7 @@ export function evaluateAirQuality(
       aqi: 3,
       usAqi,
       label: 'Unhealthy for Sensitive Groups',
-      color: '#f97316', // orange-500
+      color: '#f97316',
       description: 'Members of sensitive groups (respiratory, elderly, children) may experience health effects.',
       healthRecommendation: 'Sensitive individuals should wear an N95 mask near high-traffic street corridors.',
       outdoorActivityRating: 'Exercise with Caution',
@@ -317,7 +173,7 @@ export function evaluateAirQuality(
       aqi: 4,
       usAqi,
       label: 'Unhealthy',
-      color: '#ef4444', // red-500
+      color: '#ef4444',
       description: 'Everyone may begin to experience health effects; sensitive groups experience more serious effects.',
       healthRecommendation: 'Avoid prolonged outdoor physical exertion. Keep windows closed and run indoor air filtration.',
       outdoorActivityRating: 'Avoid Strenuous Outdoor Activities',
@@ -325,61 +181,120 @@ export function evaluateAirQuality(
       dominantPollutant,
     };
   }
-  if (usAqi <= 300) {
-    return {
-      aqi: 5,
-      usAqi,
-      label: 'Very Unhealthy',
-      color: '#a855f7', // purple-500
-      description: 'Health alert: risk of serious adverse health effects is increased for the entire population.',
-      healthRecommendation: 'Stay indoors. Wear high-filtration masks if travelling on roads or public spaces.',
-      outdoorActivityRating: 'Hazardous for Outdoor Exercise',
-      roadsideTrafficImpact,
-      dominantPollutant,
-    };
-  }
   return {
     aqi: 5,
     usAqi,
-    label: 'Hazardous',
-    color: '#881337', // rose-900 / maroon
-    description: 'Health warning of emergency conditions: the entire population is significantly affected.',
-    healthRecommendation: 'Emergency condition: avoid all outdoor exposure. Seal living quarters and run HEPA filters.',
-    outdoorActivityRating: 'Stay Indoors',
+    label: 'Very Unhealthy',
+    color: '#a855f7',
+    description: 'Health alert: risk of serious adverse health effects is increased for the entire population.',
+    healthRecommendation: 'Stay indoors. Wear high-filtration masks if travelling on roads or public spaces.',
+    outdoorActivityRating: 'Hazardous for Outdoor Exercise',
     roadsideTrafficImpact,
     dominantPollutant,
   };
 }
 
-/**
- * Fetches Weather Data using OpenWeatherMap API (with Open-Meteo fallback)
- */
-export async function fetchWeatherData(lat: number, lon: number, cityName?: string): Promise<WeatherData> {
-  // 1. Primary: Server Proxy Endpoint (Bypasses browser CORS/network blocks)
+export async function fetchServerReverseGeocode(lat: number, lon: number): Promise<LocationHierarchy> {
+  const fallbackHierarchy: LocationHierarchy = {
+    road: undefined,
+    district: undefined,
+    city: undefined,
+    country: undefined,
+    fullHierarchy: `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`,
+    displayName: `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`,
+    placeType: 'city',
+  };
+
   try {
-    const nameParam = cityName ? `&name=${encodeURIComponent(cityName)}` : '';
-    const proxyRes = await fetch(`/api/weather?lat=${lat}&lon=${lon}${nameParam}`, {
-      signal: AbortSignal.timeout(5000),
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'GeoAtmosphere-3D-ServerProxy/3.0',
+      },
+      signal: AbortSignal.timeout(3500),
     });
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data && typeof data.temp === 'number') {
-        return data;
-      }
+
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const road =
+        addr.road ||
+        addr.pedestrian ||
+        addr.footway ||
+        addr.street ||
+        addr.path ||
+        addr.highway ||
+        addr.avenue ||
+        addr.boulevard;
+      const houseNumber = addr.house_number;
+      const roadType = addr.highway || (road ? 'Street / Road' : undefined);
+      const neighbourhood = addr.neighbourhood || addr.quarter || addr.subdivision;
+      const suburb = addr.suburb || addr.residential || addr.city_district;
+      const district = addr.city_district || addr.district || addr.borough || addr.subdistrict || addr.county;
+      const city = addr.city || addr.town || addr.municipality || addr.village || addr.hamlet;
+      const county = addr.county || addr.state_district;
+      const state = addr.state || addr.region || addr.province || addr.state_code;
+      const country = addr.country || addr.country_name;
+      const countryCode = addr.country_code ? addr.country_code.toUpperCase() : undefined;
+      const postcode = addr.postcode;
+
+      let placeType: 'street' | 'district' | 'city' | 'landmark' | 'address' = 'city';
+      if (road) placeType = 'street';
+      else if (district || suburb || neighbourhood) placeType = 'district';
+      else if (city) placeType = 'city';
+
+      const roadDisplay = road ? (houseNumber ? `${road} #${houseNumber}` : road) : undefined;
+      const districtDisplay = district && district !== city ? district : (suburb || neighbourhood);
+      const hierarchyParts = [
+        roadDisplay,
+        districtDisplay,
+        city,
+        state && state !== city ? state : undefined,
+        country,
+      ].filter(Boolean);
+
+      const fullHierarchy = hierarchyParts.length > 0 ? hierarchyParts.join(', ') : `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+
+      return {
+        road: roadDisplay,
+        houseNumber,
+        roadType,
+        neighbourhood,
+        suburb,
+        district: districtDisplay,
+        city,
+        county,
+        state,
+        country,
+        countryCode,
+        postcode,
+        fullHierarchy,
+        displayName: roadDisplay || districtDisplay || city || fullHierarchy,
+        placeType,
+      };
     }
-  } catch {
-    // Continue to direct browser fetch fallback
+  } catch (err: any) {
+    // Non-fatal, return fallback coordinates
   }
 
-  const apiKey = customOwmApiKey;
-  const hierarchyPromise = fetchLocationHierarchy(lat, lon);
+  return fallbackHierarchy;
+}
 
-  if (apiKey) {
+export async function fetchServerWeather(lat: number, lon: number, cityName?: string): Promise<WeatherData> {
+  const hierarchyPromise = fetchServerReverseGeocode(lat, lon);
+
+  // Check if OpenWeather API key exists in server environment
+  const owmKey = process.env.OPENWEATHER_API_KEY || process.env.VITE_OPENWEATHER_API_KEY;
+  if (owmKey) {
     try {
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`;
-      const [response, hierarchy] = await Promise.all([fetch(url), hierarchyPromise]);
-      if (response.ok) {
-        const data = await response.json();
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${owmKey}`;
+      const [res, hierarchy] = await Promise.all([
+        fetch(url, { signal: AbortSignal.timeout(4000) }),
+        hierarchyPromise,
+      ]);
+      if (res.ok) {
+        const data = await res.json();
         const primaryCity = cityName || hierarchy.road || hierarchy.city || data.name || 'Current Location';
         return {
           city: primaryCity,
@@ -405,20 +320,23 @@ export async function fetchWeatherData(lat: number, lon: number, cityName?: stri
           locationHierarchy: hierarchy,
         };
       }
-    } catch (err) {
-      console.warn('[Weather API] OpenWeatherMap call failed, falling back to Open-Meteo:', err);
+    } catch {
+      // Continue to Open-Meteo
     }
   }
 
-  // Live Open-Meteo high-precision forecast (100% keyless & real-time)
+  // Open-Meteo high precision forecast
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code,cloud_cover&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
-    const [res, hierarchy] = await Promise.all([fetch(url), hierarchyPromise]);
+    const [res, hierarchy] = await Promise.all([
+      fetch(url, { signal: AbortSignal.timeout(4500) }),
+      hierarchyPromise,
+    ]);
+
     if (res.ok) {
       const data = await res.json();
       const current = data.current;
       const weatherInfo = mapWmoCode(current.weather_code);
-
       const resolvedCity = cityName || hierarchy.road || hierarchy.district || hierarchy.city || hierarchy.state || 'Global Station';
 
       return {
@@ -442,8 +360,8 @@ export async function fetchWeatherData(lat: number, lon: number, cityName?: stri
         locationHierarchy: hierarchy,
       };
     }
-  } catch (err) {
-    console.warn('[Weather API] Open-Meteo query notice:', err);
+  } catch {
+    // Fall back to atmospheric model
   }
 
   const hierarchy = await hierarchyPromise;
@@ -470,31 +388,12 @@ export async function fetchWeatherData(lat: number, lon: number, cityName?: stri
   };
 }
 
-/**
- * Fetches Full Air Quality (AQI) Data for EVERY location on Earth
- */
-export async function fetchAqiData(lat: number, lon: number): Promise<AqiData> {
-  // 1. Primary: Server Proxy Endpoint
-  try {
-    const proxyRes = await fetch(`/api/aqi?lat=${lat}&lon=${lon}`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data && typeof data.aqi === 'number') {
-        return data;
-      }
-    }
-  } catch {
-    // Continue to direct browser fetch fallback
-  }
-
-  const apiKey = customOwmApiKey;
-
-  if (apiKey) {
+export async function fetchServerAqi(lat: number, lon: number): Promise<AqiData> {
+  const owmKey = process.env.OPENWEATHER_API_KEY || process.env.VITE_OPENWEATHER_API_KEY;
+  if (owmKey) {
     try {
-      const url = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${apiKey}`;
-      const res = await fetch(url);
+      const url = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${owmKey}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
       if (res.ok) {
         const json = await res.json();
         const item = json.list?.[0];
@@ -521,15 +420,14 @@ export async function fetchAqiData(lat: number, lon: number): Promise<AqiData> {
           };
         }
       }
-    } catch (err) {
-      console.warn('[AQI API] OpenWeather AQI fetch error, falling back to Open-Meteo:', err);
+    } catch {
+      // Continue to Open-Meteo
     }
   }
 
-  // Open-Meteo Global Air Quality API (Every location on Earth, keyless & real-time)
   try {
     const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,european_aqi,us_aqi`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
     if (res.ok) {
       const data = await res.json();
       const current = data.current;
@@ -556,11 +454,10 @@ export async function fetchAqiData(lat: number, lon: number): Promise<AqiData> {
         nh3: 2.1,
       };
     }
-  } catch (err) {
-    console.warn('[AQI API] Fallback notice:', err);
+  } catch {
+    // Fall back to baseline
   }
 
-  // Baseline evaluation
   const pm2_5 = 16.4;
   const pm10 = 28.1;
   const no2 = 21.6;
@@ -581,44 +478,23 @@ export async function fetchAqiData(lat: number, lon: number): Promise<AqiData> {
   };
 }
 
-/**
- * Searches real streets, roads, districts, cities, and landmarks worldwide using Photon (OSM)
- */
-export async function searchLocations(query: string): Promise<CitySearchResult[]> {
+export async function searchServerLocations(query: string) {
   if (!query || query.trim().length < 2) return [];
-
   const cleanQuery = query.trim();
 
-  // 1. Primary: Server Search Proxy
-  try {
-    const proxyRes = await fetch(`/api/search?q=${encodeURIComponent(cleanQuery)}`, {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data as CitySearchResult[];
-      }
-    }
-  } catch {
-    // Continue to direct search
-  }
-
-  // 2. Direct Photon OpenStreetMap Global Geocoding API (Searches streets, districts, roads, places)
   try {
     const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=10`;
-    const res = await fetch(photonUrl);
+    const res = await fetch(photonUrl, { signal: AbortSignal.timeout(3500) });
     if (res.ok) {
       const data = await res.json();
       if (data.features && Array.isArray(data.features) && data.features.length > 0) {
-        const results: CitySearchResult[] = [];
-
+        const results = [];
         for (const f of data.features) {
           const p = f.properties || {};
           const coords = f.geometry?.coordinates;
           if (!coords || coords.length < 2) continue;
 
-          let placeType: PlaceCategory = 'city';
+          let placeType = 'city';
           if (p.osm_key === 'highway' || p.type === 'street') placeType = 'street';
           else if (p.osm_key === 'place' && ['suburb', 'quarter', 'neighbourhood', 'district'].includes(p.osm_value)) {
             placeType = 'district';
@@ -638,53 +514,15 @@ export async function searchLocations(query: string): Promise<CitySearchResult[]
             lon: coords[0],
           });
         }
-
         if (results.length > 0) return results;
       }
     }
-  } catch (err) {
-    console.warn('[Location Search] Photon query error, trying Nominatim fallback:', err);
+  } catch {
+    // Continue
   }
 
-  // 2. Secondary: OpenStreetMap Nominatim Search
-  try {
-    const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-      cleanQuery
-    )}&format=json&addressdetails=1&limit=8`;
-    const res = await fetch(nominatimUrl, {
-      headers: { Accept: 'application/json' },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((item: any) => {
-          const addr = item.address || {};
-          let pType: PlaceCategory = 'city';
-          if (addr.road || item.class === 'highway') pType = 'street';
-          else if (addr.district || addr.suburb || addr.neighbourhood) pType = 'district';
-          else if (item.class === 'tourism' || item.class === 'historic') pType = 'landmark';
-
-          return {
-            name: item.name || addr.road || addr.city || cleanQuery,
-            country: addr.country || '',
-            admin1: addr.state,
-            district: addr.city_district || addr.suburb || addr.neighbourhood,
-            road: addr.road,
-            postcode: addr.postcode,
-            type: pType,
-            lat: parseFloat(item.lat),
-            lon: parseFloat(item.lon),
-          };
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[Location Search] Nominatim fallback error:', err);
-  }
-
-  // 3. Fallback: Curated famous real streets, districts, and cities
-  const PRESETS: CitySearchResult[] = [
-    // Real Streets & Roads
+  // Curated presets fallback
+  const PRESETS = [
     { name: 'Broadway', country: 'United States', admin1: 'New York', district: 'Manhattan', road: 'Broadway', type: 'street', lat: 40.7580, lon: -73.9855 },
     { name: 'Champs-Élysées', country: 'France', admin1: 'Île-de-France', district: '8th Arrondissement', road: 'Avenue des Champs-Élysées', type: 'street', lat: 48.8698, lon: 2.3075 },
     { name: 'Abbey Road', country: 'United Kingdom', admin1: 'England', district: 'Westminster', road: 'Abbey Road', type: 'street', lat: 51.5320, lon: -0.1774 },
@@ -692,13 +530,11 @@ export async function searchLocations(query: string): Promise<CitySearchResult[]
     { name: 'Lombard Street', country: 'United States', admin1: 'California', district: 'Russian Hill', road: 'Lombard Street', type: 'street', lat: 37.8021, lon: -122.4187 },
     { name: 'Gran Vía', country: 'Spain', admin1: 'Madrid', district: 'Centro', road: 'Gran Vía', type: 'street', lat: 40.4203, lon: -3.7058 },
     { name: 'Sheikh Zayed Road', country: 'United Arab Emirates', admin1: 'Dubai', district: 'Downtown', road: 'Sheikh Zayed Road', type: 'street', lat: 25.2167, lon: 55.2744 },
-    // Real Districts & Quarters
     { name: 'Manhattan', country: 'United States', admin1: 'New York', district: 'New York County', type: 'district', lat: 40.7831, lon: -73.9712 },
     { name: 'Montmartre', country: 'France', admin1: 'Île-de-France', district: '18th Arrondissement', type: 'district', lat: 48.8867, lon: 2.3431 },
-    { name: 'Westminster', country: 'United Kingdom', admin1: 'Greater London', district: 'City of Westminster', type: 'district', lat: 51.4975, lon: -0.1357 },
+    { name: 'Westminster', country: 'United Kingdom', admin1: 'England', district: 'Westminster', type: 'district', lat: 51.4975, lon: -0.1357 },
     { name: 'Shinjuku', country: 'Japan', admin1: 'Tokyo', district: 'Shinjuku Ward', type: 'district', lat: 35.6938, lon: 139.7034 },
     { name: 'Beverly Hills', country: 'United States', admin1: 'California', district: 'Los Angeles County', type: 'district', lat: 34.0736, lon: -118.4004 },
-    // Megacities
     { name: 'Tokyo', country: 'Japan', admin1: 'Tokyo', type: 'city', lat: 35.6762, lon: 139.6503 },
     { name: 'London', country: 'United Kingdom', admin1: 'England', type: 'city', lat: 51.5074, lon: -0.1278 },
     { name: 'Paris', country: 'France', admin1: 'Île-de-France', type: 'city', lat: 48.8566, lon: 2.3522 },
@@ -713,20 +549,4 @@ export async function searchLocations(query: string): Promise<CitySearchResult[]
       (p.district && p.district.toLowerCase().includes(q)) ||
       (p.admin1 && p.admin1.toLowerCase().includes(q))
   );
-}
-
-// Backward compatibility alias
-export const searchCities = searchLocations;
-
-/**
- * Maps weather condition to 3D particle simulation mode
- */
-export function getParticleTypeFromWeather(weatherMain: string): WeatherParticleType {
-  const main = weatherMain.toLowerCase();
-  if (main.includes('rain') || main.includes('drizzle')) return 'rain';
-  if (main.includes('snow')) return 'snow';
-  if (main.includes('thunder') || main.includes('storm')) return 'thunderstorm';
-  if (main.includes('cloud') || main.includes('fog') || main.includes('mist')) return 'clouds';
-  if (main.includes('wind')) return 'wind';
-  return 'clear';
 }

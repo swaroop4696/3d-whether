@@ -15,6 +15,10 @@ import { SpatialCopilotBar } from './components/SpatialCopilotBar';
 import { WeatherGptCard } from './components/WeatherGptCard';
 import { FloatingNavbar } from './components/FloatingNavbar';
 import { IntelligenceDock } from './components/IntelligenceDock';
+import { IntelDetailModal, type SelectedIntelEntity } from './components/IntelDetailModal';
+import { CitizenEmissionReportModal } from './components/CitizenEmissionReportModal';
+import { EconomicCorridorFastHubModal } from './components/EconomicCorridorFastHubModal';
+import { getStoredCitizenReports } from './services/corridorAndEmissionService';
 import {
   fetchWeatherData,
   fetchAqiData,
@@ -37,6 +41,8 @@ import type {
   IntelligenceLayerType,
   ViewModeType,
   SpatialCopilotAction,
+  CitizenEmissionReport,
+  MeshIntelMode,
 } from './types';
 import { RotateCcw } from 'lucide-react';
 
@@ -55,6 +61,13 @@ export default function App() {
   const [isStreetViewOpen, setIsStreetViewOpen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewModeType>('globe');
 
+  // Citizen Reporting & Economic Corridor Hub State
+  const [citizenReports, setCitizenReports] = useState<CitizenEmissionReport[]>(() =>
+    getStoredCitizenReports()
+  );
+  const [isCitizenReportOpen, setIsCitizenReportOpen] = useState<boolean>(false);
+  const [isCorridorHubOpen, setIsCorridorHubOpen] = useState<boolean>(false);
+
   // Spatial Intelligence Feeds State
   const [fires, setFires] = useState<FireHotspot[]>([]);
   const [earthquakes, setEarthquakes] = useState<EarthquakeData[]>([]);
@@ -62,9 +75,11 @@ export default function App() {
   const [activeLayers, setActiveLayers] = useState<Record<IntelligenceLayerType, boolean>>({
     fires: true,
     earthquakes: true,
-    flights: true,
+    flights: false,
   });
   const [selectedIntelId, setSelectedIntelId] = useState<string | null>(null);
+  const [selectedIntelEntity, setSelectedIntelEntity] = useState<SelectedIntelEntity | null>(null);
+  const [meshIntelMode, setMeshIntelMode] = useState<MeshIntelMode>('fires');
 
   const globeRef = useRef<GlobeHandle>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -102,38 +117,6 @@ export default function App() {
   }, []);
 
   /**
-   * Smooth GSAP Hand-off: Crossfades from 3D Three.js canvas to 2D Google Map
-   */
-  const crossfadeToGoogleMaps = useCallback((lat: number, lon: number) => {
-    setIsGoogleMapView(true);
-
-    if (canvasContainerRef.current && googleMapLayerRef.current) {
-      gsap.killTweensOf(canvasContainerRef.current);
-      gsap.killTweensOf(googleMapLayerRef.current);
-
-      // Fade Three.js canvas opacity to 0 and set pointer-events: none
-      gsap.to(canvasContainerRef.current, {
-        opacity: 0,
-        duration: 0.6,
-        ease: 'power2.out',
-        onComplete: () => {
-          if (canvasContainerRef.current) {
-            canvasContainerRef.current.style.pointerEvents = 'none';
-          }
-        },
-      });
-
-      // Render Google Map at exact clicked coordinates with zoom level 14
-      googleMapLayerRef.current.style.pointerEvents = 'auto';
-      gsap.to(googleMapLayerRef.current, {
-        opacity: 1,
-        duration: 0.6,
-        ease: 'power2.out',
-      });
-    }
-  }, []);
-
-  /**
    * Seamless Reset (Back to Orbit):
    * Reverse sequence: fade out Google Map, fade in Three.js canvas,
    * and animate the 3D camera pulling back out to full Earth orbital view.
@@ -143,11 +126,19 @@ export default function App() {
     setIsGoogleMapView(false);
     setIsStreetViewOpen(false);
 
-    if (canvasContainerRef.current && googleMapLayerRef.current) {
+    if (canvasContainerRef.current) {
+      canvasContainerRef.current.style.visibility = 'visible';
+      canvasContainerRef.current.style.pointerEvents = 'auto';
       gsap.killTweensOf(canvasContainerRef.current);
-      gsap.killTweensOf(googleMapLayerRef.current);
+      gsap.to(canvasContainerRef.current, {
+        opacity: 1,
+        duration: 0.6,
+        ease: 'power2.inOut',
+      });
+    }
 
-      // Fade out Google Map
+    if (googleMapLayerRef.current) {
+      gsap.killTweensOf(googleMapLayerRef.current);
       gsap.to(googleMapLayerRef.current, {
         opacity: 0,
         duration: 0.6,
@@ -155,16 +146,9 @@ export default function App() {
         onComplete: () => {
           if (googleMapLayerRef.current) {
             googleMapLayerRef.current.style.pointerEvents = 'none';
+            googleMapLayerRef.current.style.visibility = 'hidden';
           }
         },
-      });
-
-      // Fade in Three.js canvas and restore pointer-events
-      canvasContainerRef.current.style.pointerEvents = 'auto';
-      gsap.to(canvasContainerRef.current, {
-        opacity: 1,
-        duration: 0.6,
-        ease: 'power2.inOut',
       });
     }
 
@@ -174,12 +158,105 @@ export default function App() {
     }
   }, []);
 
+  /**
+   * Fetches weather, AQI, and deep reverse geocoded hierarchy for specified coordinates,
+   * animates camera, and displays the Weather GPT glassmorphic card.
+   */
+  const loadLocationData = useCallback(
+    async (lat: number, lon: number, name?: string, triggerFlyAnimation = false, openCard = true) => {
+      setLoading(true);
+      setCurrentLat(lat);
+      setCurrentLon(lon);
+      if (openCard && viewMode !== 'godseye3d') {
+        setIsCardOpen(true);
+      }
+
+      if (triggerFlyAnimation && globeRef.current && !isGoogleMapView) {
+        // Smooth camera flight into coordinates on 3D globe
+        globeRef.current.zoomToLocation(lat, lon, 6.2);
+      }
+
+      try {
+        const [weatherResult, aqiResult] = await Promise.all([
+          fetchWeatherData(lat, lon, name),
+          fetchAqiData(lat, lon),
+        ]);
+
+        setWeather(weatherResult);
+        setAqi(aqiResult);
+        setCityName(weatherResult.city);
+
+        // Derive dynamic 3D weather particles from condition
+        const matchedParticles = getParticleTypeFromWeather(weatherResult.weather_main);
+        setParticleType(matchedParticles);
+      } catch (err) {
+        console.error('[App] Failed to load telemetry data:', err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [viewMode, isGoogleMapView]
+  );
+
+  /**
+   * Smooth GSAP Hand-off: Crossfades from 3D Three.js canvas to 2D Google Map
+   * Sets exact coordinates where user zoomed in, loads location telemetry silently,
+   * and prevents black-screen flashes during transition.
+   */
+  const crossfadeToGoogleMaps = useCallback(
+    (lat: number, lon: number) => {
+      setCurrentLat(lat);
+      setCurrentLon(lon);
+      setIsGoogleMapView(true);
+      setViewMode('roadmap');
+
+      if (canvasContainerRef.current && googleMapLayerRef.current) {
+        gsap.killTweensOf(canvasContainerRef.current);
+        gsap.killTweensOf(googleMapLayerRef.current);
+
+        canvasContainerRef.current.style.pointerEvents = 'none';
+        gsap.to(canvasContainerRef.current, {
+          opacity: 0,
+          duration: 0.5,
+          ease: 'power2.out',
+          onComplete: () => {
+            if (canvasContainerRef.current) {
+              canvasContainerRef.current.style.visibility = 'hidden';
+            }
+          },
+        });
+
+        googleMapLayerRef.current.style.visibility = 'visible';
+        googleMapLayerRef.current.style.pointerEvents = 'auto';
+        gsap.to(googleMapLayerRef.current, {
+          opacity: 1,
+          duration: 0.5,
+          ease: 'power2.out',
+        });
+      }
+
+      // Fetch location details without popping up the obstructive card
+      loadLocationData(lat, lon, undefined, false, false);
+    },
+    [loadLocationData]
+  );
+
   const handleSelectViewMode = useCallback(
     (mode: ViewModeType) => {
       setViewMode(mode);
       if (mode === 'godseye3d') {
+        setIsCardOpen(false);
         setIsGoogleMapView(false);
         setIsStreetViewOpen(false);
+        if (canvasContainerRef.current) {
+          canvasContainerRef.current.style.opacity = '0';
+          canvasContainerRef.current.style.visibility = 'hidden';
+          canvasContainerRef.current.style.pointerEvents = 'none';
+        }
+        if (googleMapLayerRef.current) {
+          googleMapLayerRef.current.style.opacity = '0';
+          googleMapLayerRef.current.style.pointerEvents = 'none';
+        }
       } else if (mode === 'roadmap') {
         if (currentLat !== null && currentLon !== null) {
           crossfadeToGoogleMaps(currentLat, currentLon);
@@ -214,42 +291,13 @@ export default function App() {
   }, [currentLat, currentLon, isGoogleMapView, crossfadeToGoogleMaps]);
 
   /**
-   * Fetches weather, AQI, and deep reverse geocoded hierarchy for specified coordinates,
-   * animates camera, and displays the Weather GPT glassmorphic card.
+   * Dedicated location update for 3D View (does NOT trigger Weather Card)
    */
-  const loadLocationData = useCallback(
-    async (lat: number, lon: number, name?: string, triggerFlyAnimation = false) => {
-      setLoading(true);
-      setCurrentLat(lat);
-      setCurrentLon(lon);
-      setIsCardOpen(true);
-
-      if (triggerFlyAnimation && globeRef.current && !isGoogleMapView) {
-        // Smooth camera flight into coordinates on 3D globe
-        globeRef.current.zoomToLocation(lat, lon, 6.2);
-      }
-
-      try {
-        const [weatherResult, aqiResult] = await Promise.all([
-          fetchWeatherData(lat, lon, name),
-          fetchAqiData(lat, lon),
-        ]);
-
-        setWeather(weatherResult);
-        setAqi(aqiResult);
-        setCityName(weatherResult.city);
-
-        // Derive dynamic 3D weather particles from condition
-        const matchedParticles = getParticleTypeFromWeather(weatherResult.weather_main);
-        setParticleType(matchedParticles);
-      } catch (err) {
-        console.error('[App] Failed to load telemetry data:', err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [crossfadeToGoogleMaps, isGoogleMapView]
-  );
+  const handle3DLocationSelected = useCallback((newLat: number, newLon: number, newName: string) => {
+    setCurrentLat(newLat);
+    setCurrentLon(newLon);
+    setCityName(newName);
+  }, []);
 
   /**
    * Executes AI Spatial Copilot actions from natural language
@@ -343,8 +391,36 @@ export default function App() {
     (lat: number, lon: number, title: string, category: IntelligenceLayerType) => {
       setSelectedIntelId(`${category}-${lat}-${lon}`);
       loadLocationData(lat, lon, title, true);
+
+      if (category === 'earthquakes') {
+        const matched =
+          earthquakes.find(
+            (e) => Math.abs(e.lat - lat) < 0.15 && Math.abs(e.lon - lon) < 0.15
+          ) || earthquakes[0];
+        if (matched) {
+          setSelectedIntelEntity({ type: 'earthquakes', earthquake: matched });
+        }
+      } else if (category === 'fires') {
+        setMeshIntelMode('fires');
+        const matched =
+          fires.find(
+            (f) => Math.abs(f.lat - lat) < 0.15 && Math.abs(f.lon - lon) < 0.15
+          ) || fires[0];
+        if (matched) {
+          setSelectedIntelEntity({ type: 'fires', fire: matched });
+        }
+      } else if (category === 'flights') {
+        setMeshIntelMode('flights');
+        const matched =
+          flights.find(
+            (fl) => Math.abs(fl.lat - lat) < 0.5 && Math.abs(fl.lon - lon) < 0.5
+          ) || flights[0];
+        if (matched) {
+          setSelectedIntelEntity({ type: 'flights', flight: matched });
+        }
+      }
     },
-    [loadLocationData]
+    [earthquakes, fires, flights, loadLocationData]
   );
 
   /**
@@ -357,12 +433,17 @@ export default function App() {
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#020408]">
       {/* 1. Google Maps Integration & Layering:
-          Full-screen #google-map-container positioned absolutely behind Three.js #canvas-container */}
+          Full-screen #google-map-layer dynamically promoted to z-10 when active */}
       <div
         id="google-map-layer"
         ref={googleMapLayerRef}
-        className="absolute inset-0 w-full h-full z-0 pointer-events-none"
-        style={{ opacity: 0 }}
+        className={`absolute inset-0 w-full h-full ${
+          isGoogleMapView ? 'z-10 pointer-events-auto' : 'z-0 pointer-events-none'
+        }`}
+        style={{
+          opacity: isGoogleMapView ? 1 : 0,
+          visibility: isGoogleMapView ? 'visible' : 'hidden',
+        }}
       >
         <GoogleMapView
           lat={currentLat}
@@ -378,12 +459,19 @@ export default function App() {
         />
       </div>
 
-      {/* 2. Central Hero 3D Earth Globe Canvas (Positioned on top with z-10 for raycasting and orbiting) */}
+      {/* 2. Central Hero 3D Earth Globe Canvas (Positioned on top with z-10 only when in 3D orbit) */}
       <div
         id="canvas-container"
         ref={canvasContainerRef}
-        className="absolute inset-0 w-full h-full z-10 pointer-events-auto"
-        style={{ opacity: 1 }}
+        className={`absolute inset-0 w-full h-full ${
+          !isGoogleMapView && viewMode === 'globe'
+            ? 'z-10 pointer-events-auto'
+            : 'z-0 pointer-events-none'
+        }`}
+        style={{
+          opacity: !isGoogleMapView && viewMode === 'globe' ? 1 : 0,
+          visibility: !isGoogleMapView && viewMode === 'globe' ? 'visible' : 'hidden',
+        }}
       >
         <ThreeGlobe
           ref={globeRef}
@@ -393,11 +481,12 @@ export default function App() {
           onLocationSelected={handleGlobeClick}
           onZoomThresholdCrossed={handleZoomThresholdCrossed}
           autoRotateGlobe={autoRotate}
+          isMapViewActive={isGoogleMapView || viewMode !== 'globe'}
           onToggleAutoRotate={() => setAutoRotate((prev) => !prev)}
           onOpenStreetMap={() => {
-            if (currentLat !== null && currentLon !== null) {
-              crossfadeToGoogleMaps(currentLat, currentLon);
-            }
+            const targetLat = currentLat ?? 37.7749;
+            const targetLon = currentLon ?? -122.4194;
+            crossfadeToGoogleMaps(targetLat, targetLon);
           }}
           fires={fires}
           earthquakes={earthquakes}
@@ -420,31 +509,22 @@ export default function App() {
         />
       )}
 
-      {/* 2c. God's Eye 3D Photorealistic Tiles View (CesiumJS 3D Buildings & Roads) */}
+      {/* 2c. God's Eye 3D Mesh (Dedicated Live Aircraft, Wildfires & Earthquakes) */}
       {viewMode === 'godseye3d' && (
-        <div className="absolute inset-0 w-full h-full z-15 pointer-events-auto">
+        <div className="absolute inset-0 w-full h-full z-20 pointer-events-auto">
           <GodsEye3DView
-            lat={currentLat || 37.7915}
-            lon={currentLon || -122.3995}
-            locationName={cityName || '3D Urban Sector'}
+            lat={currentLat || 48.8566}
+            lon={currentLon || 2.3522}
+            locationName={cityName || 'Paris, France'}
             onReturnToGlobe={handleReturnToOrbit}
             onOpenRoadMap={() => handleSelectViewMode('roadmap')}
+            onSelectLocation={handle3DLocationSelected}
+            fires={fires}
+            earthquakes={earthquakes}
+            flights={flights}
+            onSelectIntelEvent={handleSelectIntelEvent}
+            initialMode={meshIntelMode}
           />
-        </div>
-      )}
-
-      {/* 3. Floating Minimalist "Return to Orbit" Pill Button (Visible when in Street Map view) */}
-      {isGoogleMapView && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 animate-fade-in pointer-events-auto">
-          <button
-            id="btn-floating-return-to-orbit"
-            onClick={handleReturnToOrbit}
-            title="Return to 3D Planetary Orbit"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full weather-gpt-pill text-white/95 hover:text-white hover:bg-white/10 text-xs font-medium tracking-wide transition-all shadow-2xl active:scale-95 cursor-pointer border border-sky-400/40 bg-[#0c121e]/85 backdrop-blur-2xl"
-          >
-            <RotateCcw className="w-4 h-4 text-sky-400" />
-            <span>Return to Orbit</span>
-          </button>
         </div>
       )}
 
@@ -468,26 +548,31 @@ export default function App() {
         hasLocationSelected={currentLat !== null && currentLon !== null}
         viewMode={viewMode}
         onSelectViewMode={handleSelectViewMode}
+        onOpenCitizenReports={() => setIsCitizenReportOpen(true)}
+        onOpenCorridorHub={() => setIsCorridorHubOpen(true)}
+        citizenReportCount={citizenReports.length}
       />
 
-      {/* 5. Weather GPT Floating Minimalist Glass Card */}
-      <WeatherGptCard
-        weather={weather}
-        aqi={aqi}
-        loading={loading}
-        isOpen={isCardOpen}
-        onClose={handleCloseCard}
-        particleType={particleType}
-        onChangeParticleType={setParticleType}
-        onOpenStreetMap={() => {
-          if (currentLat !== null && currentLon !== null) {
-            crossfadeToGoogleMaps(currentLat, currentLon);
-          }
-        }}
-        onOpenStreetView={handleOpenStreetView}
-        onResetView={handleReturnToOrbit}
-        isStreetMapOpen={isGoogleMapView}
-      />
+      {/* 5. Weather GPT Floating Minimalist Glass Card - Hidden in 3D Mode */}
+      {viewMode !== 'godseye3d' && isCardOpen && (
+        <WeatherGptCard
+          weather={weather}
+          aqi={aqi}
+          loading={loading}
+          isOpen={isCardOpen}
+          onClose={handleCloseCard}
+          particleType={particleType}
+          onChangeParticleType={setParticleType}
+          onOpenStreetMap={() => {
+            if (currentLat !== null && currentLon !== null) {
+              crossfadeToGoogleMaps(currentLat, currentLon);
+            }
+          }}
+          onOpenStreetView={handleOpenStreetView}
+          onResetView={handleReturnToOrbit}
+          isStreetMapOpen={isGoogleMapView}
+        />
+      )}
 
       {/* 6. Gemini AI Spatial Intelligence Copilot Bar */}
       <SpatialCopilotBar
@@ -496,6 +581,48 @@ export default function App() {
         currentLocationName={cityName}
         currentMode={viewMode}
         onExecuteAction={handleExecuteCopilotAction}
+      />
+
+      {/* 7. Real-Time Spatial Intelligence Field Telemetry Modal (Earthquakes, Fires, Flights) */}
+      <IntelDetailModal
+        entity={selectedIntelEntity}
+        onClose={() => setSelectedIntelEntity(null)}
+        onFlyTo3D={(targetLat, targetLon, targetName, mode) => {
+          if (mode) {
+            setMeshIntelMode(mode);
+          }
+          setIsCardOpen(false);
+          setCurrentLat(targetLat);
+          setCurrentLon(targetLon);
+          if (targetName) setCityName(targetName);
+          handleSelectViewMode('godseye3d');
+        }}
+        onOpenRoadMap={(targetLat, targetLon) => {
+          crossfadeToGoogleMaps(targetLat, targetLon);
+        }}
+      />
+
+      {/* 8. Citizen Emission Reporting Module ("Citizen Climate Watch") */}
+      <CitizenEmissionReportModal
+        isOpen={isCitizenReportOpen}
+        onClose={() => setIsCitizenReportOpen(false)}
+        reports={citizenReports}
+        onReportsUpdated={(updated) => setCitizenReports(updated)}
+        currentLat={currentLat}
+        currentLon={currentLon}
+        currentLocationName={cityName}
+        onFlyToLocation={(tLat, tLon, tName) => {
+          loadLocationData(tLat, tLon, tName, true, true);
+        }}
+      />
+
+      {/* 9. Indian Economic Corridor Fast Hub Modal */}
+      <EconomicCorridorFastHubModal
+        isOpen={isCorridorHubOpen}
+        onClose={() => setIsCorridorHubOpen(false)}
+        onFlyToLocation={(tLat, tLon, tName) => {
+          loadLocationData(tLat, tLon, tName, true, true);
+        }}
       />
     </main>
   );

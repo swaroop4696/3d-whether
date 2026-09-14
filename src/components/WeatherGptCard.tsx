@@ -61,45 +61,30 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
   const [showDetailedAqi, setShowDetailedAqi] = useState(false);
   const [showFullHierarchy, setShowFullHierarchy] = useState(false);
 
-  // GSAP Slide & Fade In/Out Animation
+  // GSAP Slide & Fade In Animation
   useEffect(() => {
-    if (!cardRef.current) return;
+    if (!cardRef.current || !isOpen) return;
     const el = cardRef.current;
 
-    if (isOpen) {
-      gsap.killTweensOf(el);
-      gsap.fromTo(
-        el,
-        {
-          opacity: 0,
-          y: 35,
-          scale: 0.97,
-        },
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          duration: 0.5,
-          ease: 'power3.out',
-          display: 'block',
-        }
-      );
-    } else {
-      gsap.killTweensOf(el);
-      gsap.to(el, {
+    gsap.killTweensOf(el);
+    gsap.fromTo(
+      el,
+      {
         opacity: 0,
-        y: 25,
+        y: 30,
         scale: 0.97,
-        duration: 0.35,
-        ease: 'power2.in',
-        onComplete: () => {
-          if (el) el.style.display = 'none';
-        },
-      });
-    }
+      },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.4,
+        ease: 'power3.out',
+      }
+    );
   }, [isOpen]);
 
-  if (!isOpen && !weather && !loading) {
+  if (!isOpen) {
     return null;
   }
 
@@ -145,7 +130,7 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
           <div className="flex items-center gap-2 text-[11px] font-mono text-sky-400 tracking-wider">
             <Compass className="w-3.5 h-3.5 text-sky-400 shrink-0" />
             <span>
-              {weather
+              {typeof weather?.lat === 'number' && typeof weather?.lon === 'number'
                 ? `${weather.lat.toFixed(4)}°N, ${weather.lon.toFixed(4)}°E`
                 : 'Triangulating Earth Coordinates...'}
             </span>
@@ -317,7 +302,7 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
           </span>
           <span className="w-1 h-1 rounded-full bg-slate-600" />
           <span>
-            Wind: {windCardinal} {weather ? weather.wind_speed.toFixed(0) : '--'} km/h
+            Wind: {windCardinal} {typeof weather?.wind_speed === 'number' ? weather.wind_speed.toFixed(0) : '--'} km/h
           </span>
         </div>
       </div>
