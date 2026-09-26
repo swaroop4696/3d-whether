@@ -1,6 +1,6 @@
 {
   "name": "GeoAtmosphere 3D Weather & Globe Dashboard",
   "description": "Federated AI climate action platform and 3D globe with Indian Economic Corridor Forecast Hub, Citizen Emission Reporting, NASA FIRMS fires, USGS earthquakes, live flights, God's Eye 3D views, and Street View.",
-  "requestFramePermissions": ["geolocation"],
+  "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

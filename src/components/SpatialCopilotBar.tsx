@@ -21,13 +21,15 @@ interface SpatialCopilotBarProps {
   currentLocationName: string;
   currentMode: ViewModeType;
   onExecuteAction: (action: SpatialCopilotAction) => void;
+  onOpenChatOrVoice?: () => void;
 }
 
 const QUICK_PROMPTS = [
   { label: 'Wildfires', icon: Flame, prompt: 'Fly to active wildfire hotspots with NASA thermal sensors', color: 'text-orange-400' },
   { label: 'Earthquakes', icon: Activity, prompt: 'Show seismic earthquake epicenters along tectonic faults', color: 'text-amber-400' },
-  { label: '3D Cities', icon: Building2, prompt: 'Enter 3D tactical inspection in San Francisco', color: 'text-emerald-400' },
-  { label: 'Road Traffic', icon: Route, prompt: 'Inspect 2D road cartography and live traffic congestion in Tokyo', color: 'text-indigo-400' },
+  { label: 'New Delhi', icon: Building2, prompt: 'Fly to New Delhi, India and inspect air quality', color: 'text-emerald-400' },
+  { label: 'Beijing 3D', icon: Building2, prompt: 'Enter 3D tactical inspection in Beijing, China', color: 'text-sky-400' },
+  { label: 'Brasília', icon: Route, prompt: 'Inspect road cartography and atmosphere in Brasília, Brazil', color: 'text-indigo-400' },
 ];
 
 export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
@@ -36,6 +38,7 @@ export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
   currentLocationName,
   currentMode,
   onExecuteAction,
+  onOpenChatOrVoice,
 }) => {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -117,23 +120,40 @@ export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
           action: 'setMode',
           mode: 'roadmap',
         };
-      } else if (lower.includes('tokyo')) {
+      } else if (lower.includes('delhi') || lower.includes('new delhi') || lower.includes('india')) {
         fallback = {
-          replyText: 'Navigating to Tokyo, Japan.',
+          replyText: 'Flying to New Delhi, India.',
           action: 'flyTo',
-          targetLocation: { name: 'Tokyo, Japan', lat: 35.6762, lon: 139.6503, zoom: 11 },
+          targetLocation: { name: 'New Delhi, India', lat: 28.6139, lon: 77.2090, zoom: 11 },
+          insights: 'National Capital Territory of Delhi, critical BRICS economic corridor hub.',
         };
-      } else if (lower.includes('paris')) {
+      } else if (lower.includes('beijing') || lower.includes('china')) {
         fallback = {
-          replyText: 'Flying to Paris, France.',
+          replyText: 'Flying to Beijing, China.',
           action: 'flyTo',
-          targetLocation: { name: 'Paris, France', lat: 48.8566, lon: 2.3522, zoom: 12 },
+          targetLocation: { name: 'Beijing, China', lat: 39.9042, lon: 116.4074, zoom: 11 },
+          insights: 'Capital of the People\'s Republic of China, BRICS founding member.',
         };
-      } else if (lower.includes('new york') || lower.includes('nyc')) {
+      } else if (lower.includes('moscow') || lower.includes('russia')) {
         fallback = {
-          replyText: 'Flying to New York City.',
+          replyText: 'Flying to Moscow, Russia.',
           action: 'flyTo',
-          targetLocation: { name: 'New York, USA', lat: 40.7128, lon: -74.006, zoom: 12 },
+          targetLocation: { name: 'Moscow, Russia', lat: 55.7558, lon: 37.6173, zoom: 11 },
+          insights: 'Federal City of Moscow, European plain boreal atmosphere.',
+        };
+      } else if (lower.includes('brasilia') || lower.includes('brasília') || lower.includes('brazil')) {
+        fallback = {
+          replyText: 'Flying to Brasília, Brazil.',
+          action: 'flyTo',
+          targetLocation: { name: 'Brasília, Brazil', lat: -15.7975, lon: -47.8919, zoom: 11 },
+          insights: 'Federal District of Brazil, planned capital city.',
+        };
+      } else if (lower.includes('cairo') || lower.includes('egypt')) {
+        fallback = {
+          replyText: 'Flying to Cairo, Egypt.',
+          action: 'flyTo',
+          targetLocation: { name: 'Cairo, Egypt', lat: 30.0444, lon: 31.2357, zoom: 11 },
+          insights: 'Nile Delta metropolitan corridor, BRICS member nation.',
         };
       }
 
@@ -207,14 +227,26 @@ export const SpatialCopilotBar: React.FC<SpatialCopilotBarProps> = ({
               <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
             </div>
           ) : (
-            <button
-              onClick={() => handleSubmit()}
-              disabled={!prompt.trim()}
-              className="p-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shrink-0"
-              title="Execute Spatial Command"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              {onOpenChatOrVoice && (
+                <button
+                  onClick={onOpenChatOrVoice}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all cursor-pointer text-xs font-semibold"
+                  title="Open Multi-Turn Chat & Live Voice (gemini-3.8-live)"
+                >
+                  <Mic className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+                  <span className="hidden sm:inline">Voice & Chat</span>
+                </button>
+              )}
+              <button
+                onClick={() => handleSubmit()}
+                disabled={!prompt.trim()}
+                className="p-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shrink-0"
+                title="Execute Spatial Command"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
           )}
 
           <button

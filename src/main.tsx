@@ -34,3 +34,15 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
+// Gracefully dissolve Fast Torch loader with 150ms ease
+if (typeof window !== 'undefined') {
+  requestAnimationFrame(() => {
+    const loader = document.getElementById('fast-torch-loader');
+    if (loader) {
+      loader.style.opacity = '0';
+      loader.style.pointerEvents = 'none';
+      setTimeout(() => loader.remove(), 320);
+    }
+  });
+}
+

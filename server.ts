@@ -1,18 +1,22 @@
 import 'dotenv/config';
+import http from 'http';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, Modality } from '@google/genai';
+import { WebSocketServer, WebSocket } from 'ws';
 import {
   fetchServerWeather,
   fetchServerAqi,
   fetchServerReverseGeocode,
   searchServerLocations,
 } from './server/weatherApi';
+import { database } from './server/db';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const server = http.createServer(app);
+  const PORT = Number(process.env.PORT) || 3000;
 
   // CORS and preflight handling
   app.use((_req, res, next) => {
@@ -47,6 +51,55 @@ async function startServer() {
       engine: "God's Eye View & GeoAtmosphere 3D",
       hasGeminiKey: !!process.env.GEMINI_API_KEY,
     });
+  });
+
+  // Real Database Persistence Endpoints
+  app.get('/api/db/reports', (_req, res) => {
+    res.json(database.getReports());
+  });
+
+  app.post('/api/db/reports', (req, res) => {
+    try {
+      const reports = database.addReport(req.body);
+      res.json({ success: true, reports });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to save to database' });
+    }
+  });
+
+  app.delete('/api/db/reports/:id', (req, res) => {
+    try {
+      const reports = database.deleteReport(req.params.id);
+      res.json({ success: true, reports });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to delete record' });
+    }
+  });
+
+  app.get('/api/db/observations', (_req, res) => {
+    res.json(database.getObservations());
+  });
+
+  app.post('/api/db/observations', (req, res) => {
+    try {
+      const observations = database.addObservation(req.body);
+      res.json({ success: true, observations });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to save observation' });
+    }
+  });
+
+  app.get('/api/db/favorites', (_req, res) => {
+    res.json(database.getFavorites());
+  });
+
+  app.post('/api/db/favorites', (req, res) => {
+    try {
+      const favorites = database.addFavorite(req.body);
+      res.json({ success: true, favorites });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to save favorite' });
+    }
   });
 
   // Safe client configuration endpoint: returns any server-configured Google Maps key
@@ -183,7 +236,7 @@ async function startServer() {
       const ai = getGeminiClient();
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents: `You are the AI Spatial Intelligence Agent for a 3D Earth and Planetary Monitoring Platform ("God's Eye View").
 The dashboard supports:
 1. 3D Daylight Earth Orbit (Three.js globe with clouds, sun lighting, and orbital raycasting)
@@ -327,6 +380,174 @@ Interpret their spatial intent.
     }
   });
 
+  // Multi-Turn Gemini Chatbot Endpoint
+  // Supports gemini-3.5-flash (general), gemini-3.1-pro-preview (complex reasoning), and gemini-3.1-flash-lite (fast)
+  app.post('/api/gemini/chat', async (req, res) => {
+    const { message, history, model, systemRole, currentContext } = req.body || {};
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'A message string is required' });
+    }
+
+    // Selected model with fallback to gemini-3.5-flash
+    const allowedModels = ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite'];
+    const chosenModel = allowedModels.includes(model) ? model : 'gemini-3.5-flash';
+
+    // System instruction based on chosen persona role
+    let systemInstruction = `You are the Gemini Planetary & Earth Intelligence Assistant for an interactive 3D Globe platform ("God's Eye View" & "GeoAtmosphere 3D").
+You provide authoritative, clear, and insightful answers about planetary weather, atmospheric physics, seismic faults, wildfires, and geography.
+Current user coordinates and location: ${JSON.stringify(currentContext || {})}.
+Be direct, helpful, and scientific yet accessible.
+If the user asks you to fly or navigate somewhere or inspect fires/earthquakes, mention where you are taking them.`;
+
+    if (systemRole === 'climate') {
+      systemInstruction = `You are a Senior Climate & Meteorological Specialist for the 3D Planetary Dashboard.
+Focus deeply on atmospheric circulation, greenhouse gas dynamics, air quality (PM2.5, NO2), extreme weather events, and climate resilience.
+Current user location: ${JSON.stringify(currentContext || {})}.`;
+    } else if (systemRole === 'navigator') {
+      systemInstruction = `You are a Tactical Earth Navigator for the 3D Planetary Observation Platform.
+Focus on geographic navigation, coordinates, orbital vantage points, and tactical flight/road corridors.
+Current user location: ${JSON.stringify(currentContext || {})}.`;
+    }
+
+    try {
+      const ai = getGeminiClient();
+
+      // Format previous history into Gemini contents format
+      const contentsPayload: any[] = [];
+      if (Array.isArray(history)) {
+        for (const item of history) {
+          if (item && item.role && item.parts && Array.isArray(item.parts)) {
+            contentsPayload.push({
+              role: item.role === 'assistant' ? 'model' : 'user',
+              parts: item.parts.map((p: any) => ({ text: String(p.text || '') })),
+            });
+          }
+        }
+      }
+
+      // Add current message
+      contentsPayload.push({
+        role: 'user',
+        parts: [{ text: message }],
+      });
+
+      const response = await ai.models.generateContent({
+        model: chosenModel,
+        contents: contentsPayload,
+        config: {
+          systemInstruction,
+        },
+      });
+
+      const replyText = response.text || "I have analyzed your query.";
+
+      // Check if user asked to fly or travel to a place
+      let actionData: any = null;
+      const lower = message.toLowerCase();
+      if (lower.startsWith('fly to') || lower.startsWith('go to') || lower.startsWith('navigate to') || lower.startsWith('take me to')) {
+        const placeName = message.replace(/^(fly to|go to|navigate to|take me to)\s+/i, '').replace(/[?.!]/g, '').trim();
+        actionData = {
+          action: 'flyTo',
+          targetLocation: { name: placeName },
+        };
+      } else if (lower.includes('wildfire') || lower.includes('fires')) {
+        actionData = { action: 'toggleLayer', layer: 'fires', enabled: true };
+      } else if (lower.includes('earthquake') || lower.includes('quakes')) {
+        actionData = { action: 'toggleLayer', layer: 'earthquakes', enabled: true };
+      }
+
+      return res.json({
+        replyText,
+        modelUsed: chosenModel,
+        actionData,
+      });
+    } catch (err: any) {
+      console.warn('[Server] Gemini Chat error, falling back:', err?.message || err);
+
+      return res.json({
+        replyText: `[Planetary Assistant] Regarding "${message}": Our orbital telemetry monitors global air quality, seismic belts, and thermal anomalies. You can explore active wildfires (NASA FIRMS) and recent earthquakes (USGS) in 3D right now.`,
+        modelUsed: chosenModel,
+        actionData: null,
+      });
+    }
+  });
+
+  // WebSocket Server for Gemini Live API (gemini-3.8-live) Real-Time Voice Conversations
+  const wss = new WebSocketServer({ server, path: '/live' });
+
+  wss.on('connection', async (clientWs: WebSocket) => {
+    console.log('[GeminiLive] Client connected to /live WebSocket');
+
+    let session: any = null;
+
+    try {
+      const ai = getGeminiClient();
+
+      session = await ai.live.connect({
+        model: 'gemini-3.8-live',
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+          },
+          systemInstruction:
+            'You are the real-time Gemini voice copilot for the 3D Planetary & Earth Dashboard. Keep your spoken responses concise, natural, and helpful. You can discuss weather, geography, wildfires, and earthquakes.',
+        },
+        callbacks: {
+          onmessage: (message: any) => {
+            if (clientWs.readyState !== WebSocket.OPEN) return;
+
+            const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+            if (audio) {
+              clientWs.send(JSON.stringify({ audio }));
+            }
+
+            const text = message.serverContent?.modelTurn?.parts?.[0]?.text;
+            if (text) {
+              clientWs.send(JSON.stringify({ text }));
+            }
+
+            if (message.serverContent?.interrupted) {
+              clientWs.send(JSON.stringify({ interrupted: true }));
+            }
+          },
+        },
+      });
+
+      clientWs.on('message', (data: Buffer | string) => {
+        try {
+          const parsed = JSON.parse(data.toString());
+
+          if (parsed.audio && session) {
+            session.sendRealtimeInput({
+              audio: { data: parsed.audio, mimeType: 'audio/pcm;rate=16000' },
+            });
+          }
+        } catch (err) {
+          console.warn('[GeminiLive] Error handling client packet:', err);
+        }
+      });
+
+      clientWs.on('close', () => {
+        console.log('[GeminiLive] Client disconnected');
+        if (session && typeof session.close === 'function') {
+          session.close();
+        }
+      });
+    } catch (err: any) {
+      console.error('[GeminiLive] Error connecting to Gemini Live session:', err?.message || err);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(
+          JSON.stringify({
+            error: 'Failed to initiate Gemini Live API session. Ensure GEMINI_API_KEY is configured.',
+          })
+        );
+        clientWs.close();
+      }
+    }
+  });
+
   // Development Vite middleware vs Production static serving
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -342,7 +563,7 @@ Interpret their spatial intent.
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[GodsEyeServer] Server running on http://0.0.0.0:${PORT}`);
   });
 }

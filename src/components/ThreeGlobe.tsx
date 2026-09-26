@@ -552,7 +552,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     }, []);
 
     /**
-     * Updates 3D NASA FIRMS Active Wildfire Beacons with distinct models based on FRP & Intensity
+     * Updates 3D NASA FIRMS Active Wildfire Indicators (Clean, Static, Non-Vibrating Geospatial Pins)
      */
     const updateFiresLayer = useCallback((fireList: FireHotspot[], visible: boolean) => {
       if (!firesGroupRef.current) return;
@@ -569,62 +569,55 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
         fireContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
         const isMega = fire.frp >= 140 || fire.brightness >= 340;
-        const isCanopy = fire.frp >= 50 && fire.frp < 140;
+        const color = isMega ? 0xef4444 : 0xf97316;
+        const groundRadius = isMega ? 0.09 : 0.06;
 
-        // Ground burn radius ring
-        const groundRadius = isMega ? 0.12 : isCanopy ? 0.08 : 0.05;
-        const groundGeom = new THREE.RingGeometry(groundRadius * 0.4, groundRadius, 24);
-        const groundMat = new THREE.MeshBasicMaterial({
-          color: isMega ? 0xdc2626 : isCanopy ? 0xff3700 : 0xf59e0b,
+        // Static crisp ground perimeter ring
+        const ringGeom = new THREE.RingGeometry(groundRadius * 0.7, groundRadius, 24);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color,
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: isMega ? 0.9 : 0.75,
+          opacity: 0.85,
         });
-        const groundMesh = new THREE.Mesh(groundGeom, groundMat);
-        groundMesh.rotation.x = Math.PI / 2;
-        groundMesh.userData = { type: 'fires', data: fire };
-        fireContainer.add(groundMesh);
+        const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        ringMesh.userData = { type: 'fires', data: fire };
+        fireContainer.add(ringMesh);
 
-        // Vertical flame cone
-        const flameHeight = isMega
-          ? Math.min(0.48, 0.22 + (fire.frp / 400) * 0.26)
-          : isCanopy
-          ? Math.min(0.32, 0.14 + (fire.frp / 400) * 0.18)
-          : 0.16;
-        const flameWidth = isMega ? 0.055 : isCanopy ? 0.038 : 0.024;
-        const flameGeom = new THREE.ConeGeometry(flameWidth, flameHeight, 14);
-        const flameMat = new THREE.MeshBasicMaterial({
-          color: isMega ? 0xff5500 : isCanopy ? 0xff7700 : 0xfbbf24,
+        // Static center radiant core dot
+        const dotRadius = isMega ? 0.028 : 0.02;
+        const dotGeom = new THREE.CircleGeometry(dotRadius, 16);
+        const dotMat = new THREE.MeshBasicMaterial({
+          color: 0xffedd5,
+          side: THREE.DoubleSide,
+        });
+        const dotMesh = new THREE.Mesh(dotGeom, dotMat);
+        dotMesh.rotation.x = Math.PI / 2;
+        dotMesh.position.y = 0.002;
+        dotMesh.userData = { type: 'fires', data: fire };
+        fireContainer.add(dotMesh);
+
+        // Clean static vertical indicator pin
+        const pinHeight = isMega ? 0.22 : 0.15;
+        const pinGeom = new THREE.CylinderGeometry(0.005, 0.005, pinHeight, 8);
+        pinGeom.translate(0, pinHeight / 2, 0);
+        const pinMat = new THREE.MeshBasicMaterial({
+          color,
           transparent: true,
-          opacity: 0.92,
+          opacity: 0.9,
         });
-        const flameMesh = new THREE.Mesh(flameGeom, flameMat);
-        flameMesh.position.y = flameHeight / 2;
-        flameMesh.userData = { type: 'fires', data: fire };
-        fireContainer.add(flameMesh);
+        const pinMesh = new THREE.Mesh(pinGeom, pinMat);
+        pinMesh.userData = { type: 'fires', data: fire };
+        fireContainer.add(pinMesh);
 
-        // Glowing ember at tip
-        const tipRadius = isMega ? 0.032 : isCanopy ? 0.022 : 0.016;
-        const tipGeom = new THREE.SphereGeometry(tipRadius, 10, 10);
-        const tipMat = new THREE.MeshBasicMaterial({ color: isMega ? 0xffffff : 0xffdd00 });
+        // Static glowing beacon tip
+        const tipGeom = new THREE.SphereGeometry(isMega ? 0.024 : 0.016, 10, 10);
+        const tipMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const tipMesh = new THREE.Mesh(tipGeom, tipMat);
-        tipMesh.position.y = flameHeight;
+        tipMesh.position.y = pinHeight;
         tipMesh.userData = { type: 'fires', data: fire };
         fireContainer.add(tipMesh);
-
-        // For Mega Fires: Add smoke puff sphere
-        if (isMega) {
-          const smokeGeom = new THREE.SphereGeometry(0.045, 8, 8);
-          const smokeMat = new THREE.MeshBasicMaterial({
-            color: 0x334155,
-            transparent: true,
-            opacity: 0.65,
-          });
-          const smokeMesh = new THREE.Mesh(smokeGeom, smokeMat);
-          smokeMesh.position.y = flameHeight + 0.05;
-          smokeMesh.userData = { type: 'fires', data: fire };
-          fireContainer.add(smokeMesh);
-        }
 
         fireContainer.userData = { type: 'fires', data: fire };
         group.add(fireContainer);
@@ -632,7 +625,7 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
     }, []);
 
     /**
-     * Updates 3D USGS Earthquake Shockwaves & Depths with distinct styles for shallow megathrust vs deep subduction
+     * Updates 3D USGS Earthquake Indicators (Clean, Static, Non-Vibrating Concentric Target Pins)
      */
     const updateQuakesLayer = useCallback((quakeList: EarthquakeData[], visible: boolean) => {
       if (!quakesGroupRef.current) return;
@@ -650,63 +643,55 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
 
         const isMega = quake.magnitude >= 6.8;
         const isDeep = (quake.depth || 10) >= 60;
-        const color = quake.magnitude >= 6.0 ? 0xef4444 : quake.magnitude >= 4.5 ? 0xf59e0b : 0xeab308;
-        const radius = Math.max(0.06, (quake.magnitude / 8.0) * 0.24);
+        const color = quake.magnitude >= 6.0 ? 0xef4444 : quake.magnitude >= 4.5 ? 0xf59e0b : 0x38bdf8;
+        const radius = Math.max(0.06, (quake.magnitude / 8.0) * 0.2);
 
-        // Concentric expanding shockwave ring
-        const ringGeom = new THREE.RingGeometry(radius * 0.82, radius, 28);
+        // Static Primary Epicenter Ring
+        const ringGeom = new THREE.RingGeometry(radius * 0.8, radius, 32);
         const ringMat = new THREE.MeshBasicMaterial({
           color,
           side: THREE.DoubleSide,
           transparent: true,
-          opacity: isMega ? 0.95 : 0.72,
+          opacity: 0.85,
         });
         const ringMesh = new THREE.Mesh(ringGeom, ringMat);
         ringMesh.rotation.x = Math.PI / 2;
         ringMesh.userData = { type: 'earthquakes', data: quake };
         quakeContainer.add(ringMesh);
 
-        // Center epicenter dot
-        const dotRadius = isMega ? 0.035 : 0.024;
-        const dotGeom = new THREE.SphereGeometry(dotRadius, 12, 12);
-        const dotMat = new THREE.MeshBasicMaterial({ color });
+        // Static Secondary Outer Target Ring
+        const outerRingGeom = new THREE.RingGeometry(radius * 1.25, radius * 1.35, 32);
+        const outerRingMat = new THREE.MeshBasicMaterial({
+          color,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.45,
+        });
+        const outerRingMesh = new THREE.Mesh(outerRingGeom, outerRingMat);
+        outerRingMesh.rotation.x = Math.PI / 2;
+        outerRingMesh.userData = { type: 'earthquakes', data: quake };
+        quakeContainer.add(outerRingMesh);
+
+        // Static Center Epicenter Core Dot
+        const dotRadius = isMega ? 0.03 : 0.022;
+        const dotGeom = new THREE.SphereGeometry(dotRadius, 10, 10);
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const dotMesh = new THREE.Mesh(dotGeom, dotMat);
         dotMesh.userData = { type: 'earthquakes', data: quake };
         quakeContainer.add(dotMesh);
 
-        // Subsurface hypocenter depth spike
-        const depthLen = Math.min(0.45, Math.max(0.06, (quake.depth / 200) * 0.35));
-        const stemGeom = new THREE.CylinderGeometry(0.007, 0.007, depthLen, 8);
-        const stemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: isDeep ? 0.85 : 0.5 });
+        // Static Subsurface Hypocenter Focal Depth Stem
+        const depthLen = Math.min(0.42, Math.max(0.06, (quake.depth / 200) * 0.35));
+        const stemGeom = new THREE.CylinderGeometry(0.006, 0.006, depthLen, 8);
+        const stemMat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: isDeep ? 0.9 : 0.5,
+        });
         const stemMesh = new THREE.Mesh(stemGeom, stemMat);
         stemMesh.position.y = -depthLen / 2;
         stemMesh.userData = { type: 'earthquakes', data: quake };
         quakeContainer.add(stemMesh);
-
-        // If Mega: Add secondary outer shockwave ring
-        if (isMega) {
-          const outerRingGeom = new THREE.RingGeometry(radius * 1.35, radius * 1.45, 28);
-          const outerRingMat = new THREE.MeshBasicMaterial({
-            color: 0xef4444,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.5,
-          });
-          const outerRingMesh = new THREE.Mesh(outerRingGeom, outerRingMat);
-          outerRingMesh.rotation.x = Math.PI / 2;
-          outerRingMesh.userData = { type: 'earthquakes', data: quake };
-          quakeContainer.add(outerRingMesh);
-        }
-
-        // If Deep Subduction: Add glowing core sphere at hypocenter depth
-        if (isDeep) {
-          const coreGeom = new THREE.SphereGeometry(0.028, 10, 10);
-          const coreMat = new THREE.MeshBasicMaterial({ color: 0x818cf8 });
-          const coreMesh = new THREE.Mesh(coreGeom, coreMat);
-          coreMesh.position.y = -depthLen;
-          coreMesh.userData = { type: 'earthquakes', data: quake };
-          quakeContainer.add(coreMesh);
-        }
 
         quakeContainer.userData = { type: 'earthquakes', data: quake };
         group.add(quakeContainer);
@@ -1293,45 +1278,8 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
           outerRingMat.opacity = 0.3 + Math.cos(elapsedTime * 2.8) * 0.2;
         }
 
-        // Spatial Intelligence Layers Animation
-        if (firesGroupRef.current && activeLayers.fires) {
-          firesGroupRef.current.children.forEach((fGroup: any, idx) => {
-            const fireData = fGroup.userData?.data;
-            const isMega = fireData?.frp >= 140;
-            const tipMesh = fGroup.children[2];
-            if (tipMesh) {
-              const freq = isMega ? 10.0 : 6.5;
-              const flicker = (isMega ? 1.0 : 0.8) + Math.sin(elapsedTime * freq + idx * 1.7) * (isMega ? 0.45 : 0.25);
-              tipMesh.scale.set(flicker, flicker, flicker);
-            }
-            // Animate secondary smoke plume puff for mega fires
-            const smokeMesh = fGroup.children[3];
-            if (smokeMesh) {
-              const smokePulse = 1.0 + Math.sin(elapsedTime * 3.2 + idx) * 0.25;
-              smokeMesh.scale.set(smokePulse, smokePulse, smokePulse);
-            }
-          });
-        }
-
-        if (quakesGroupRef.current && activeLayers.earthquakes) {
-          quakesGroupRef.current.children.forEach((qGroup: any, idx) => {
-            const quakeData = qGroup.userData?.data;
-            const isMega = (quakeData?.magnitude || 0) >= 6.8;
-            const ringMesh = qGroup.children[0];
-            if (ringMesh) {
-              const waveSpeed = isMega ? 4.5 : 3.2;
-              const waveAmp = isMega ? 0.35 : 0.2;
-              const wave = 1.0 + Math.sin(elapsedTime * waveSpeed + idx * 0.8) * waveAmp;
-              ringMesh.scale.set(wave, wave, 1);
-            }
-            // Secondary outer ring for mega quakes
-            const outerRing = qGroup.children[3];
-            if (outerRing) {
-              const outerWave = 1.0 + Math.cos(elapsedTime * 4.0 + idx * 0.8) * 0.3;
-              outerRing.scale.set(outerWave, outerWave, 1);
-            }
-          });
-        }
+        // Spatial Intelligence Layers (Clean, static, non-vibrating indicators on 3D globe)
+        // Dynamic animation occurs inside the dedicated 3D Inspector view (GodsEye3DView)
 
         if (flightsGroupRef.current && activeLayers.flights) {
           flightsGroupRef.current.children.forEach((flightGroup: any) => {

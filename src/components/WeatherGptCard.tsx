@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   X,
   Droplets,
@@ -6,6 +6,7 @@ import {
   Gauge,
   ShieldCheck,
   ChevronDown,
+  ChevronUp,
   Sparkles,
   CloudRain,
   Sun,
@@ -14,16 +15,15 @@ import {
   Compass,
   MapPin,
   RotateCcw,
-  Activity,
   Route,
   Building2,
-  Landmark,
-  ShieldAlert,
-  AlertTriangle,
   HeartPulse,
-  Car,
-  CheckCircle2,
   Eye,
+  Maximize2,
+  Minimize2,
+  TrendingUp,
+  Activity,
+  BarChart3,
 } from 'lucide-react';
 import gsap from 'gsap';
 import type { WeatherData, AqiData, WeatherParticleType } from '../types';
@@ -44,6 +44,8 @@ interface WeatherGptCardProps {
   isStreetMapOpen?: boolean;
 }
 
+type SingleChartTab = 'temp_curve' | 'air_quality' | 'vitals';
+
 export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
   weather,
   aqi,
@@ -58,8 +60,12 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
   isStreetMapOpen = false,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [showDetailedAqi, setShowDetailedAqi] = useState(false);
-  const [showFullHierarchy, setShowFullHierarchy] = useState(false);
+  const [chartTab, setChartTab] = useState<SingleChartTab>('temp_curve');
+  
+  // Mobile responsiveness: default to minimized on screens < 640px so users can see the globe/map
+  const [isMinimized, setIsMinimized] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 640;
+  });
 
   // GSAP Slide & Fade In Animation
   useEffect(() => {
@@ -71,18 +77,18 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
       el,
       {
         opacity: 0,
-        y: 30,
-        scale: 0.97,
+        y: 20,
+        scale: 0.98,
       },
       {
         opacity: 1,
         y: 0,
         scale: 1,
-        duration: 0.4,
+        duration: 0.35,
         ease: 'power3.out',
       }
     );
-  }, [isOpen]);
+  }, [isOpen, isMinimized]);
 
   if (!isOpen) {
     return null;
@@ -90,480 +96,433 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
 
   const hierarchy = weather?.locationHierarchy;
   const windCardinal = weather ? getWindCardinal(weather.wind_deg) : 'N';
+  const currentTemp = weather ? Math.round(weather.temp) : 24;
+  const minTemp = weather ? Math.round(weather.temp_min) : currentTemp - 4;
+  const maxTemp = weather ? Math.round(weather.temp_max) : currentTemp + 4;
+  const usAqiValue = aqi?.usAqi ?? (aqi ? aqi.aqi * 30 : 42);
 
-  // Pressure evaluation
-  const getPressureStatus = (pressure: number) => {
-    if (pressure > 1018) return { label: 'High Barometric', color: 'text-sky-400' };
-    if (pressure < 1008) return { label: 'Low Barometric', color: 'text-amber-400' };
-    return { label: 'Stable Pressure', color: 'text-emerald-400' };
+  // Synthesize realistic 24-Hour Temperature Curve for the ONE chart box
+  const tempCurvePoints = [
+    { label: '03:00', temp: minTemp, hour: '3 AM' },
+    { label: '07:00', temp: Math.round(minTemp + (maxTemp - minTemp) * 0.25), hour: '7 AM' },
+    { label: '11:00', temp: Math.round(minTemp + (maxTemp - minTemp) * 0.8), hour: '11 AM' },
+    { label: '15:00', temp: maxTemp, hour: '3 PM' },
+    { label: '19:00', temp: Math.round(minTemp + (maxTemp - minTemp) * 0.65), hour: '7 PM' },
+    { label: '23:00', temp: Math.round(minTemp + (maxTemp - minTemp) * 0.3), hour: '11 PM' },
+  ];
+
+  // SVG Chart path calculation
+  const chartWidth = 340;
+  const chartHeight = 90;
+  const tempRange = Math.max(1, maxTemp - minTemp + 4);
+  const getSvgY = (tempVal: number) => {
+    const normalized = (tempVal - (minTemp - 2)) / tempRange;
+    return chartHeight - normalized * (chartHeight - 24) - 12;
   };
 
-  // Humidity evaluation
-  const getHumidityStatus = (humidity: number) => {
-    if (humidity > 70) return { label: 'High Humidity', color: 'text-blue-400' };
-    if (humidity < 35) return { label: 'Arid Atmosphere', color: 'text-amber-300' };
-    return { label: 'Optimal Comfort', color: 'text-emerald-400' };
-  };
+  const svgPoints = tempCurvePoints.map((pt, idx) => {
+    const x = 20 + idx * ((chartWidth - 40) / (tempCurvePoints.length - 1));
+    const y = getSvgY(pt.temp);
+    return { ...pt, x, y };
+  });
 
-  // US EPA AQI percent progress (0 to 500 scale)
-  const usAqiValue = aqi?.usAqi ?? (aqi ? aqi.aqi * 30 : 0);
-  const aqiProgressPercent = Math.min(100, Math.max(5, (usAqiValue / 300) * 100));
+  const svgPathD = svgPoints.reduce((acc, pt, idx, arr) => {
+    if (idx === 0) return `M ${pt.x},${pt.y}`;
+    const prev = arr[idx - 1];
+    const cp1x = prev.x + (pt.x - prev.x) / 2;
+    const cp2x = cp1x;
+    return `${acc} C ${cp1x},${prev.y} ${cp2x},${pt.y} ${pt.x},${pt.y}`;
+  }, '');
 
-  return (
-    <div
-      ref={cardRef}
-      id="weather-gpt-panel"
-      className="fixed z-30 bottom-6 sm:bottom-8 right-4 sm:right-8 w-[calc(100vw-2rem)] sm:w-[460px] max-h-[88vh] overflow-y-auto pointer-events-auto weather-gpt-glass p-5 sm:p-6 text-white select-none transition-shadow"
-      style={{
-        background: 'rgba(11, 15, 24, 0.88)',
-        backdropFilter: 'blur(32px)',
-        WebkitBackdropFilter: 'blur(32px)',
-        border: '1px solid rgba(56, 189, 248, 0.2)',
-        borderRadius: '24px',
-        boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.85), 0 0 1px 1px rgba(255, 255, 255, 0.1)',
-      }}
-    >
-      {/* 1. Top Header: GPS Coordinates + Close */}
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/[0.08]">
-        <div className="space-y-1 max-w-[85%]">
-          {/* Coordinates & Place Type */}
-          <div className="flex items-center gap-2 text-[11px] font-mono text-sky-400 tracking-wider">
-            <Compass className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-            <span>
-              {typeof weather?.lat === 'number' && typeof weather?.lon === 'number'
-                ? `${weather.lat.toFixed(4)}°N, ${weather.lon.toFixed(4)}°E`
-                : 'Triangulating Earth Coordinates...'}
-            </span>
-            {hierarchy?.placeType && (
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-sans font-medium uppercase bg-sky-500/20 text-sky-300 border border-sky-400/30">
-                {hierarchy.placeType === 'street'
-                  ? 'Real Street'
-                  : hierarchy.placeType === 'district'
-                  ? 'Real District'
-                  : 'Real Municipality'}
-              </span>
-            )}
-          </div>
+  const areaPathD = `${svgPathD} L ${svgPoints[svgPoints.length - 1].x},${chartHeight} L ${svgPoints[0].x},${chartHeight} Z`;
 
-          {/* Primary Street / District / City Name */}
-          <h2 className="text-xl sm:text-2xl font-normal tracking-tight text-white font-['Space_Grotesk'] leading-tight truncate">
-            {loading
-              ? 'Querying Earth Telemetry...'
-              : hierarchy?.road || hierarchy?.district || hierarchy?.city || weather?.city || 'Earth Location'}
-          </h2>
+  // Top Pollutants data for Mode 2
+  const pollutants = [
+    { name: 'PM2.5', val: aqi?.pm2_5 ?? 18.4, whoMax: 15, unit: 'μg/m³', desc: 'Fine respirable particulates' },
+    { name: 'PM10', val: aqi?.pm10 ?? 32.1, whoMax: 45, unit: 'μg/m³', desc: 'Inhalable coarse dust' },
+    { name: 'NO2', val: aqi?.no2 ?? 24.6, whoMax: 25, unit: 'μg/m³', desc: 'Vehicular traffic exhaust' },
+    { name: 'O3', val: aqi?.o3 ?? 48.0, whoMax: 100, unit: 'μg/m³', desc: 'Ground photochemical ozone' },
+    { name: 'CO', val: aqi?.co ?? 320, whoMax: 4000, unit: 'μg/m³', desc: 'Combustion carbon monoxide' },
+  ];
 
-          {/* Subline: District, City, Country */}
-          <div className="text-xs text-slate-300 font-light truncate">
-            {[
-              hierarchy?.district && hierarchy?.district !== hierarchy?.city ? hierarchy.district : undefined,
-              hierarchy?.city,
-              hierarchy?.state && hierarchy?.state !== hierarchy?.city ? hierarchy.state : undefined,
-              hierarchy?.country || weather?.country,
-            ]
-              .filter(Boolean)
-              .join(', ') || 'Global Observation Node'}
-          </div>
-        </div>
-
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          id="btn-close-weather-card"
-          aria-label="Close Weather Card"
-          className="p-1.5 rounded-full text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+  /* -------------------------------------------------------------
+   * 1. MOBILE-FRIENDLY COMPACT / MINIMIZED CAPSULE MODE
+   * Leaves 90% of screen free so mobile users can view the globe/map
+   * ------------------------------------------------------------- */
+  if (isMinimized) {
+    return (
+      <div
+        ref={cardRef}
+        id="weather-gpt-minimized-bar"
+        className="fixed z-30 bottom-24 sm:bottom-6 right-3 sm:right-6 max-w-[calc(100vw-1.5rem)] sm:max-w-md w-full pointer-events-auto select-none"
+      >
+        <div
+          className="px-4 py-2.5 rounded-2xl flex items-center justify-between gap-3 text-white transition-all shadow-2xl"
+          style={{
+            background: 'rgba(11, 17, 30, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            boxShadow: '0 12px 36px -6px rgba(0, 0, 0, 0.85), 0 0 16px rgba(56, 189, 248, 0.15)',
+          }}
         >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* 2. Real Earth Address Hierarchy (Street, District, City, State, Postcode) */}
-      {hierarchy && (
-        <div className="py-2.5 border-b border-white/[0.07]">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
-            {/* Real Street / Road */}
-            {hierarchy.road && (
-              <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-400/20 flex items-center gap-1.5">
-                <Route className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">Street / Road</span>
-                  <span className="text-sky-200 font-medium truncate block">{hierarchy.road}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Real District / Suburb */}
-            {(hierarchy.district || hierarchy.suburb) && (
-              <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-400/20 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">District / Suburb</span>
-                  <span className="text-amber-200 font-medium truncate block">
-                    {hierarchy.district || hierarchy.suburb}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Real City / Municipality */}
-            {hierarchy.city && (
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-400/20 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">City / Town</span>
-                  <span className="text-emerald-200 font-medium truncate block">{hierarchy.city}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Postal Code */}
-            {hierarchy.postcode && (
-              <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-400/20 flex items-center gap-1.5">
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">Postal Code</span>
-                  <span className="text-purple-200 font-mono font-medium truncate block">
-                    {hierarchy.postcode}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Region / State */}
-            {hierarchy.state && (
-              <div className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-1.5">
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">State / Region</span>
-                  <span className="text-slate-300 font-medium truncate block">{hierarchy.state}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Country */}
-            {hierarchy.country && (
-              <div className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-1.5">
-                <div className="min-w-0">
-                  <span className="text-[9px] text-slate-400 block uppercase font-mono">Country</span>
-                  <span className="text-slate-300 font-medium truncate block">
-                    {hierarchy.country} {hierarchy.countryCode ? `(${hierarchy.countryCode})` : ''}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Full Reverse Geocoded Address expander */}
-          {hierarchy.fullHierarchy && (
-            <div className="mt-1.5 pt-1 text-[11px] text-slate-400 flex items-center justify-between">
-              <span className="truncate pr-2 font-mono text-[10px] text-slate-400">
-                {showFullHierarchy ? hierarchy.fullHierarchy : hierarchy.fullHierarchy.slice(0, 70) + '...'}
-              </span>
-              <button
-                onClick={() => setShowFullHierarchy(!showFullHierarchy)}
-                className="text-sky-400 hover:text-sky-300 text-[10px] font-medium shrink-0 cursor-pointer"
-              >
-                {showFullHierarchy ? 'Less' : 'Full Address'}
-              </button>
+          {/* Location & Temp */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 font-bold text-xs shrink-0">
+              {weather?.temp ? `${Math.round(weather.temp)}°` : '--°'}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* 3. Temperature & Weather Conditions */}
-      <div className="py-3 border-b border-white/[0.07]">
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="text-5xl sm:text-6xl font-extralight tracking-tighter text-white leading-none font-['Plus_Jakarta_Sans'] flex items-baseline">
-            {loading ? (
-              <span className="text-slate-500 animate-pulse">--.-°</span>
-            ) : (
-              <AnimatedCounter value={weather?.temp} decimals={1} suffix="°C" className="font-extralight" />
-            )}
+            <div className="truncate">
+              <span className="text-xs font-semibold text-white tracking-tight block truncate">
+                {hierarchy?.road || hierarchy?.district || hierarchy?.city || weather?.city || 'Selected Location'}
+              </span>
+              <span className="text-[10px] text-slate-300 block truncate">
+                {weather?.weather_desc || 'Atmospheric telemetry'}
+              </span>
+            </div>
           </div>
 
-          {/* Condition Icon / Label */}
-          <div className="text-right space-y-1">
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-sky-500/20 border border-sky-400/30 text-sky-200">
-              {weather?.weather_main || 'Atmospheric'}
-            </span>
-            <p className="text-xs text-slate-400 capitalize">{weather?.weather_desc || 'Standard telemetry'}</p>
-          </div>
-        </div>
-
-        {/* Feels Like & High/Low */}
-        <div className="flex items-center gap-3 text-xs text-slate-400 pt-2 font-light">
-          <span>
-            Feels like{' '}
-            <strong className="text-slate-200 font-normal">
-              {weather ? <AnimatedCounter value={weather.feels_like} decimals={1} suffix="°" /> : '--'}
-            </strong>
-          </span>
-          <span className="w-1 h-1 rounded-full bg-slate-600" />
-          <span>
-            H: {weather ? Math.round(weather.temp_max) : '--'}° / L:{' '}
-            {weather ? Math.round(weather.temp_min) : '--'}°
-          </span>
-          <span className="w-1 h-1 rounded-full bg-slate-600" />
-          <span>
-            Wind: {windCardinal} {typeof weather?.wind_speed === 'number' ? weather.wind_speed.toFixed(0) : '--'} km/h
-          </span>
-        </div>
-      </div>
-
-      {/* 4. "EVERY LOCATION AQI" Comprehensive Air Quality Engine */}
-      <div className="py-3 border-b border-white/[0.07] space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-white tracking-wide uppercase font-mono">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Every Location AQI & Health</span>
-          </div>
-
-          {/* Real-Time EPA AQI Index Score */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-mono">US EPA:</span>
+          {/* AQI Badge */}
+          <div className="flex items-center gap-2 shrink-0">
             <span
-              className="px-2.5 py-0.5 rounded-full text-xs font-bold font-mono tracking-wider shadow-sm"
+              className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold"
               style={{
                 backgroundColor: aqi ? `${aqi.color}25` : '#10b98125',
-                color: aqi ? aqi.color : '#10b981',
-                border: `1px solid ${aqi ? aqi.color : '#10b981'}50`,
+                color: aqi ? aqi.color : '#34d399',
+                border: `1px solid ${aqi ? aqi.color : '#34d399'}60`,
               }}
             >
               AQI {usAqiValue}
             </span>
+
+            {/* Expand Report Button */}
+            <button
+              onClick={() => setIsMinimized(false)}
+              className="px-2.5 py-1 rounded-xl bg-sky-500/25 hover:bg-sky-500/35 border border-sky-400/40 text-[11px] font-medium text-sky-200 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+              title="Expand Full Weather Report"
+            >
+              <Maximize2 className="w-3 h-3 text-sky-300" />
+              <span>Report</span>
+            </button>
+
+            {/* Close Button */}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Close"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        {/* EPA Level Card with Spectrum Bar */}
-        <div
-          className="p-3 rounded-xl border transition-all"
-          style={{
-            backgroundColor: aqi ? `${aqi.color}10` : 'rgba(255,255,255,0.03)',
-            borderColor: aqi ? `${aqi.color}35` : 'rgba(255,255,255,0.08)',
-          }}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-2">
-              <span
-                className="w-3 h-3 rounded-full animate-pulse shadow-sm"
-                style={{ backgroundColor: aqi ? aqi.color : '#10b981' }}
-              />
-              <span
-                className="text-sm font-semibold tracking-tight"
-                style={{ color: aqi ? aqi.color : '#10b981' }}
-              >
-                {aqi?.label || 'Air Quality Calibrating'}
-              </span>
-            </div>
-            {aqi?.dominantPollutant && (
-              <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                Primary: {aqi.dominantPollutant}
-              </span>
-            )}
-          </div>
-
-          {/* Color Spectrum Progress Bar (Good -> Moderate -> Unhealthy -> Hazardous) */}
-          <div className="space-y-1 mt-2">
-            <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden flex">
-              <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${aqiProgressPercent}%`,
-                  backgroundColor: aqi ? aqi.color : '#10b981',
-                }}
-              />
-            </div>
-            <div className="flex justify-between text-[9px] font-mono text-slate-500 pt-0.5">
-              <span>0 Good</span>
-              <span>50 Mod</span>
-              <span>100 Sensitive</span>
-              <span>150 Unhealthy</span>
-              <span>300+ Haz</span>
-            </div>
-          </div>
-
-          {/* Actionable Health & Outdoor Activity Advisory */}
-          <div className="mt-2.5 pt-2 border-t border-white/[0.06] space-y-1 text-xs">
-            <div className="flex items-start gap-1.5 text-slate-200">
-              <HeartPulse className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
-              <p className="leading-snug">
-                {aqi?.healthRecommendation ||
-                  'Air quality is satisfactory. Safe for all outdoor running, cycling, and travel.'}
-              </p>
-            </div>
-
-            {/* Roadside Traffic & Vehicle Emissions Impact */}
-            <div className="flex items-start gap-1.5 text-slate-300 pt-0.5">
-              <Car className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
-              <p className="leading-snug text-[11px] text-slate-400">
-                {aqi?.roadsideTrafficImpact || 'Low roadside vehicular exhaust emissions along street corridors.'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* 7-Pollutant Breakdown Toggle */}
-        <div>
-          <button
-            onClick={() => setShowDetailedAqi(!showDetailedAqi)}
-            id="btn-toggle-pollutant-breakdown"
-            className="w-full flex items-center justify-between py-1 px-1 text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <span className="flex items-center gap-1.5 font-medium">
-              <Activity className="w-3.5 h-3.5 text-sky-400" />
-              7-Pollutant Matrix (PM₂.₅, PM₁₀, NO₂, CO, O₃, SO₂, NH₃)
+  /* -------------------------------------------------------------
+   * 2. EXPANDED FULL REPORT WITH EXACTLY ONE UNIFIED CHART BOX
+   * ------------------------------------------------------------- */
+  return (
+    <div
+      ref={cardRef}
+      id="weather-gpt-panel"
+      className="fixed z-30 bottom-4 sm:bottom-6 right-3 sm:right-6 w-[calc(100vw-1.5rem)] sm:w-[440px] max-h-[82vh] overflow-y-auto pointer-events-auto p-4 sm:p-5 text-white select-none transition-all"
+      style={{
+        background: 'rgba(9, 14, 26, 0.95)',
+        backdropFilter: 'blur(32px)',
+        WebkitBackdropFilter: 'blur(32px)',
+        border: '1px solid rgba(56, 189, 248, 0.25)',
+        borderRadius: '24px',
+        boxShadow: '0 20px 60px -10px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.12)',
+      }}
+    >
+      {/* 1. Top Header: Location, Coordinates & Controls */}
+      <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/10">
+        <div className="space-y-0.5 max-w-[75%] min-w-0">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-sky-300 tracking-wider">
+            <Compass className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="truncate">
+              {typeof weather?.lat === 'number' && typeof weather?.lon === 'number'
+                ? `${weather.lat.toFixed(3)}°N, ${weather.lon.toFixed(3)}°E`
+                : 'Triangulating Coordinates...'}
             </span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform duration-300 ${
-                showDetailedAqi ? 'rotate-180 text-sky-400' : ''
-              }`}
-            />
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white font-['Space_Grotesk'] leading-tight truncate">
+            {loading
+              ? 'Loading Telemetry...'
+              : hierarchy?.road || hierarchy?.district || hierarchy?.city || weather?.city || 'Earth Location'}
+          </h2>
+
+          <p className="text-xs text-slate-200 font-medium truncate">
+            {[
+              hierarchy?.district && hierarchy?.district !== hierarchy?.city ? hierarchy.district : undefined,
+              hierarchy?.city,
+              hierarchy?.country || weather?.country,
+            ]
+              .filter(Boolean)
+              .join(', ') || 'Global Observation Node'}
+          </p>
+        </div>
+
+        {/* Action Controls: Minimize + Close */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setIsMinimized(true)}
+            id="btn-minimize-weather-card"
+            aria-label="Minimize Report"
+            title="Minimize to Compact Bar"
+            className="p-1.5 rounded-xl text-slate-300 hover:text-white bg-white/5 hover:bg-white/15 transition-colors cursor-pointer"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
           </button>
 
-          {showDetailedAqi && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 pt-2 border-t border-white/[0.06] text-center">
-              {/* PM2.5 Fine Dust */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>PM₂.₅</span>
-                  <span className="text-[9px] text-slate-500">WHO: 15</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.pm2_5} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Fine Particles</span>
-              </div>
-
-              {/* PM10 Coarse Dust */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>PM₁₀</span>
-                  <span className="text-[9px] text-slate-500">WHO: 45</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.pm10} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Coarse Dust</span>
-              </div>
-
-              {/* NO2 Traffic Nitrogen */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>NO₂</span>
-                  <span className="text-[9px] text-slate-500">Traffic</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.no2} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Vehicle Exhaust</span>
-              </div>
-
-              {/* CO Carbon Monoxide */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>CO</span>
-                  <span className="text-[9px] text-slate-500">Vehicle</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.co} decimals={0} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Carbon Monoxide</span>
-              </div>
-
-              {/* O3 Ozone */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>O₃</span>
-                  <span className="text-[9px] text-slate-500">Smog</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.o3} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Ground Ozone</span>
-              </div>
-
-              {/* SO2 Sulfur Dioxide */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>SO₂</span>
-                  <span className="text-[9px] text-slate-500">Industry</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.so2} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Sulfur Dioxide</span>
-              </div>
-
-              {/* NH3 Ammonia */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>NH₃</span>
-                  <span className="text-[9px] text-slate-500">Trace</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  <AnimatedCounter value={aqi?.nh3} decimals={1} suffix=" μg" />
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">Ammonia</span>
-              </div>
-
-              {/* European AQI Index */}
-              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>EU AQI</span>
-                  <span className="text-[9px] text-slate-500">1 - 5</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-100 mt-1">
-                  Grade {aqi?.aqi ?? 1}
-                </p>
-                <span className="text-[9px] text-slate-400 block mt-0.5">European Standard</span>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={onClose}
+            id="btn-close-weather-card"
+            aria-label="Close Weather Card"
+            className="p-1.5 rounded-xl text-slate-300 hover:text-white bg-white/5 hover:bg-white/15 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* 5. Meteorological Atmospheric Metrics (Humidity, Pressure) */}
-      <div className="grid grid-cols-2 gap-2 py-2.5 border-b border-white/[0.07]">
-        {/* Humidity (%) */}
-        <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <div className="flex items-center gap-1.5">
-              <Droplets className="w-3.5 h-3.5 text-sky-400" />
-              <span>Humidity</span>
-            </div>
-            <span className={`text-[10px] ${weather ? getHumidityStatus(weather.humidity).color : 'text-slate-500'}`}>
-              {weather ? getHumidityStatus(weather.humidity).label : ''}
+      {/* 2. Primary Atmospheric Snapshot */}
+      <div className="py-3 border-b border-white/10 flex items-center justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="text-5xl font-light tracking-tighter text-white font-['Plus_Jakarta_Sans']">
+            {loading ? (
+              <span className="text-slate-400 animate-pulse">--.-°</span>
+            ) : (
+              <AnimatedCounter value={weather?.temp} decimals={1} suffix="°C" />
+            )}
+          </span>
+          <div className="text-xs text-slate-200 font-medium space-y-0.5">
+            <span className="block text-slate-300">
+              Feels: <strong className="text-white">{weather ? Math.round(weather.feels_like) : '--'}°C</strong>
             </span>
-          </div>
-          <div className="text-lg font-light text-slate-100">
-            <AnimatedCounter value={weather?.humidity} decimals={0} suffix="%" className="font-light" />
+            <span className="block text-slate-300">
+              H: <strong className="text-white">{maxTemp}°</strong> / L:{' '}
+              <strong className="text-white">{minTemp}°</strong>
+            </span>
           </div>
         </div>
 
-        {/* Air Pressure (hPa) */}
-        <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <div className="flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-amber-400" />
-              <span>Pressure</span>
-            </div>
-            <span className={`text-[10px] ${weather ? getPressureStatus(weather.pressure).color : 'text-slate-500'}`}>
-              {weather ? getPressureStatus(weather.pressure).label : ''}
+        {/* Condition Badge & AQI pill */}
+        <div className="text-right space-y-1">
+          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/25 border border-sky-400/40 text-sky-200">
+            {weather?.weather_main || 'Clear'}
+          </span>
+          <div className="flex items-center justify-end gap-1.5">
+            <span className="text-[11px] font-mono text-slate-300">AQI</span>
+            <span
+              className="px-2 py-0.2 rounded text-[11px] font-mono font-bold"
+              style={{
+                backgroundColor: aqi ? `${aqi.color}25` : '#10b98125',
+                color: aqi ? aqi.color : '#34d399',
+                border: `1px solid ${aqi ? aqi.color : '#34d399'}60`,
+              }}
+            >
+              {usAqiValue} • {aqi?.label || 'Moderate'}
             </span>
-          </div>
-          <div className="text-lg font-light text-slate-100">
-            <AnimatedCounter value={weather?.pressure} decimals={0} suffix=" hPa" className="font-light" />
           </div>
         </div>
       </div>
 
-      {/* 6. Street Roads, Street View 360 & Orbit Navigation Buttons */}
-      <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+      {/* 3. THE ONE AND ONLY UNIFIED CHART BOX */}
+      <div className="my-3 p-3.5 rounded-2xl bg-black/40 border border-sky-400/30 shadow-inner">
+        {/* Chart Box Header with Clean Tab Pill Switcher */}
+        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/10">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-300 font-mono">
+            <TrendingUp className="w-3.5 h-3.5 text-sky-400" />
+            <span>Atmospheric Telemetry Chart</span>
+          </div>
+
+          {/* Mode Switcher inside the single box */}
+          <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/10 border border-white/10">
+            <button
+              onClick={() => setChartTab('temp_curve')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-medium transition-all cursor-pointer ${
+                chartTab === 'temp_curve'
+                  ? 'bg-sky-500/40 text-white font-bold shadow-sm'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              24h Temp
+            </button>
+            <button
+              onClick={() => setChartTab('air_quality')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-medium transition-all cursor-pointer ${
+                chartTab === 'air_quality'
+                  ? 'bg-sky-500/40 text-white font-bold shadow-sm'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Air & AQI
+            </button>
+            <button
+              onClick={() => setChartTab('vitals')}
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-medium transition-all cursor-pointer ${
+                chartTab === 'vitals'
+                  ? 'bg-sky-500/40 text-white font-bold shadow-sm'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Vitals
+            </button>
+          </div>
+        </div>
+
+        {/* TAB 1: 24h Temperature Curve SVG Chart */}
+        {chartTab === 'temp_curve' && (
+          <div className="pt-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1 font-mono">
+              <span>Diurnal Curve (24h)</span>
+              <span className="text-sky-300 font-semibold">Min: {minTemp}°C • Max: {maxTemp}°C</span>
+            </div>
+
+            {/* SVG Spline Curve Area */}
+            <div className="relative w-full h-[95px] overflow-hidden">
+              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
+                <defs>
+                  <linearGradient id="tempAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
+                    <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Subtle horizontal grid lines */}
+                <line x1="10" y1="20" x2="330" y2="20" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <line x1="10" y1="50" x2="330" y2="50" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <line x1="10" y1="80" x2="330" y2="80" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+
+                {/* Area under curve */}
+                <path d={areaPathD} fill="url(#tempAreaGradient)" />
+
+                {/* Smooth Curve Line */}
+                <path d={svgPathD} fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" />
+
+                {/* Data Points & Temperature Tags */}
+                {svgPoints.map((pt, idx) => (
+                  <g key={idx}>
+                    <circle cx={pt.x} cy={pt.y} r="3.5" fill="#0369a1" stroke="#bae6fd" strokeWidth="2" />
+                    <text
+                      x={pt.x}
+                      y={pt.y - 7}
+                      textAnchor="middle"
+                      fill="#f8fafc"
+                      fontSize="9"
+                      fontWeight="bold"
+                      fontFamily="monospace"
+                    >
+                      {pt.temp}°
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            {/* Time labels under chart */}
+            <div className="flex justify-between text-[10px] font-mono text-slate-300 pt-1 border-t border-white/5 px-1">
+              {tempCurvePoints.map((pt) => (
+                <span key={pt.label}>{pt.hour}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: Air Quality Pollutants Matrix Bar Chart */}
+        {chartTab === 'air_quality' && (
+          <div className="pt-2 space-y-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono">
+              <span>Pollutant Density vs WHO Limit</span>
+              <span className="text-emerald-300 font-semibold">{aqi?.label || 'Moderate Quality'}</span>
+            </div>
+
+            {/* Single Unified Pollutants Bar Matrix */}
+            <div className="space-y-1.5 pt-1">
+              {pollutants.map((item) => {
+                const ratio = Math.min(100, Math.round((item.val / (item.whoMax * 2)) * 100));
+                const isOver = item.val > item.whoMax;
+                return (
+                  <div key={item.name} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-12 font-mono font-bold text-slate-200">{item.name}</span>
+                    <div className="flex-1 bg-white/10 h-2 rounded-full overflow-hidden flex">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isOver ? 'bg-amber-400' : 'bg-emerald-400'
+                        }`}
+                        style={{ width: `${Math.max(8, ratio)}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-[10px] text-white w-14 text-right">
+                      {item.val.toFixed(1)} <span className="text-slate-400 text-[8px]">{item.unit.split('/')[0]}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Health Advisory snippet */}
+            <div className="mt-2 pt-2 border-t border-white/10 flex items-start gap-1.5 text-xs text-slate-200">
+              <HeartPulse className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] leading-snug">
+                {aqi?.healthRecommendation || 'Atmospheric quality is suitable for everyday outdoor routines.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Atmospheric Vitals (Humidity, Pressure, Wind) */}
+        {chartTab === 'vitals' && (
+          <div className="pt-2 grid grid-cols-3 gap-2">
+            {/* Humidity */}
+            <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-center">
+              <Droplets className="w-4 h-4 text-sky-400 mx-auto mb-1" />
+              <span className="text-[10px] text-slate-300 block font-mono">Humidity</span>
+              <span className="text-base font-bold text-white font-mono">
+                {weather?.humidity ?? 55}%
+              </span>
+              <span className="text-[9px] text-sky-300 block">
+                {weather && weather.humidity > 65 ? 'Humid' : 'Comfortable'}
+              </span>
+            </div>
+
+            {/* Pressure */}
+            <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-center">
+              <Gauge className="w-4 h-4 text-amber-400 mx-auto mb-1" />
+              <span className="text-[10px] text-slate-300 block font-mono">Pressure</span>
+              <span className="text-base font-bold text-white font-mono">
+                {weather?.pressure ?? 1013}
+              </span>
+              <span className="text-[9px] text-slate-300 block font-mono">hPa Barometer</span>
+            </div>
+
+            {/* Wind */}
+            <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-center">
+              <Wind className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+              <span className="text-[10px] text-slate-300 block font-mono">Wind Flow</span>
+              <span className="text-base font-bold text-white font-mono">
+                {weather ? Math.round(weather.wind_speed) : 12}
+              </span>
+              <span className="text-[9px] text-emerald-300 block font-mono">
+                {windCardinal} km/h
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Action Buttons (Street View, Inspect Roads, Orbit) */}
+      <div className="mt-3 flex items-center justify-between gap-2">
         {onOpenStreetMap && (
           <button
             id="btn-card-inspect-street"
             onClick={onOpenStreetMap}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-sky-500/25 hover:bg-sky-500/35 text-sky-200 border border-sky-400/40 text-xs font-semibold transition-all shadow-md active:scale-95 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-sky-500/25 hover:bg-sky-500/35 text-sky-200 border border-sky-400/40 text-xs font-semibold transition-all shadow-md active:scale-95 cursor-pointer"
           >
-            <Route className="w-4 h-4 text-sky-400 animate-pulse" />
-            <span>{isStreetMapOpen ? 'Viewing Street Roads' : 'Inspect Roads'}</span>
+            <Route className="w-3.5 h-3.5 text-sky-400" />
+            <span className="truncate">{isStreetMapOpen ? 'Viewing 2D' : 'Roads'}</span>
           </button>
         )}
 
@@ -571,10 +530,10 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
           <button
             id="btn-card-open-streetview"
             onClick={onOpenStreetView}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/40 text-xs font-semibold transition-all shadow-md active:scale-95 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/40 text-xs font-semibold transition-all shadow-md active:scale-95 cursor-pointer"
           >
-            <Eye className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span>Street View 360°</span>
+            <Eye className="w-3.5 h-3.5 text-amber-400" />
+            <span className="truncate">Street View</span>
           </button>
         )}
 
@@ -582,23 +541,23 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
           <button
             id="btn-card-reset-orbit"
             onClick={onResetView}
-            title="Reset to 3D Planetary Orbit"
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium transition-all active:scale-95 cursor-pointer"
+            title="Reset to Planetary Orbit"
+            className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white border border-white/15 text-xs font-medium transition-all active:scale-95 cursor-pointer"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+            <RotateCcw className="w-3.5 h-3.5 text-slate-300" />
             <span>Orbit</span>
           </button>
         )}
       </div>
 
-      {/* 7. Weather Particle Engine Simulation Selector */}
-      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between">
-        <span className="text-[11px] text-slate-400 font-light flex items-center gap-1.5">
+      {/* 5. Compact Atmosphere Simulation Selector */}
+      <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+        <span className="text-[11px] text-slate-300 font-light flex items-center gap-1">
           <Sparkles className="w-3 h-3 text-sky-400" />
-          Atmosphere Sim:
+          Atmosphere Mode:
         </span>
 
-        <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-full border border-white/[0.06]">
+        <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-full border border-white/10">
           {[
             { id: 'clear', label: 'Clear', icon: Sun },
             { id: 'rain', label: 'Rain', icon: CloudRain },
@@ -611,8 +570,8 @@ export const WeatherGptCard: React.FC<WeatherGptCardProps> = ({
               title={label}
               className={`p-1.5 rounded-full transition-all cursor-pointer ${
                 particleType === id
-                  ? 'bg-sky-500/25 text-sky-300 border border-sky-400/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-sky-500/30 text-sky-200 border border-sky-400/50 shadow-sm'
+                  : 'text-slate-300 hover:text-white'
               }`}
             >
               <Icon className="w-3 h-3" />

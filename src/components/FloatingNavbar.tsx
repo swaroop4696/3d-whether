@@ -18,6 +18,9 @@ import {
   Landmark,
   MapPin,
   Settings,
+  Bot,
+  Sparkles,
+  Mic,
 } from 'lucide-react';
 import { searchLocations, getCustomOwmKey, setCustomOwmKey } from '../services/weatherService';
 import type { CitySearchResult, PlaceCategory, ViewModeType } from '../types';
@@ -39,6 +42,7 @@ interface FloatingNavbarProps {
   onOpenCitizenReports?: () => void;
   onOpenCorridorHub?: () => void;
   citizenReportCount?: number;
+  onOpenGeminiAssistant?: () => void;
 }
 
 export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
@@ -57,6 +61,7 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
   onOpenCitizenReports,
   onOpenCorridorHub,
   citizenReportCount = 0,
+  onOpenGeminiAssistant,
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CitySearchResult[]>([]);
@@ -293,6 +298,21 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
               </button>
             )}
 
+            {/* Gemini Planetary Copilot: Chatbot & Live Voice API */}
+            {onOpenGeminiAssistant && (
+              <button
+                onClick={onOpenGeminiAssistant}
+                title="Open Gemini Planetary Copilot (Multi-Turn Chatbot & gemini-3.8-live Voice)"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer bg-gradient-to-r from-purple-500/20 to-sky-500/20 hover:from-purple-500/30 hover:to-sky-500/30 border border-purple-400/40 text-purple-200 active:scale-95 shadow-sm shadow-purple-500/20 mr-1"
+              >
+                <Sparkles className="w-3 h-3 text-purple-300 animate-pulse" />
+                <span className="hidden sm:inline">Gemini AI</span>
+                <span className="flex items-center gap-0.5 px-1 py-0.2 rounded-full text-[9px] font-mono bg-purple-500/30 text-purple-200">
+                  <Mic className="w-2.5 h-2.5" /> Live
+                </span>
+              </button>
+            )}
+
             {/* Reset to Orbit Vantage Button */}
             <button
               onClick={onResetView}
@@ -403,13 +423,15 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
       {/* Quick Location Pills at Top */}
       <div className="fixed top-20 inset-x-0 mx-auto w-max max-w-[95vw] z-10 pointer-events-auto hidden md:flex items-center gap-2 overflow-x-auto py-1 px-3">
         {[
-          { name: 'Tokyo', country: 'Japan', lat: 35.6762, lon: 139.6503 },
-          { name: 'New York', country: 'United States', lat: 40.7128, lon: -74.006 },
-          { name: 'London', country: 'United Kingdom', lat: 51.5074, lon: -0.1278 },
-          { name: 'Paris', country: 'France', lat: 48.8566, lon: 2.3522 },
-          { name: 'Reykjavik', country: 'Iceland', lat: 64.1466, lon: -21.9426 },
-          { name: 'Dubai', country: 'United Arab Emirates', lat: 25.2048, lon: 55.2708 },
-          { name: 'Sydney', country: 'Australia', lat: -33.8688, lon: 151.2093 },
+          { name: 'New Delhi', country: 'India', lat: 28.6139, lon: 77.2090 },
+          { name: 'Beijing', country: 'China', lat: 39.9042, lon: 116.4074 },
+          { name: 'Moscow', country: 'Russia', lat: 55.7558, lon: 37.6173 },
+          { name: 'Brasília', country: 'Brazil', lat: -15.7975, lon: -47.8919 },
+          { name: 'Pretoria', country: 'South Africa', lat: -25.7479, lon: 28.2293 },
+          { name: 'Cairo', country: 'Egypt', lat: 30.0444, lon: 31.2357 },
+          { name: 'Abu Dhabi', country: 'United Arab Emirates', lat: 24.4539, lon: 54.3773 },
+          { name: 'Riyadh', country: 'Saudi Arabia', lat: 24.7136, lon: 46.6753 },
+          { name: 'Tehran', country: 'Iran', lat: 35.6892, lon: 51.3890 },
         ].map((loc) => (
           <button
             key={loc.name}

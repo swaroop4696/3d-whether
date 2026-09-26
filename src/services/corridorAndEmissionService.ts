@@ -347,6 +347,22 @@ export function getStoredCitizenReports(): CitizenEmissionReport[] {
   }
 }
 
+export async function fetchServerDbReports(): Promise<CitizenEmissionReport[]> {
+  try {
+    const res = await fetch('/api/db/reports', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const serverReports = await res.json();
+      if (Array.isArray(serverReports) && serverReports.length > 0) {
+        saveCitizenReports(serverReports);
+        return serverReports;
+      }
+    }
+  } catch (err) {
+    console.warn('[DbService] Fetch server database reports notice:', err);
+  }
+  return getStoredCitizenReports();
+}
+
 export function saveCitizenReports(reports: CitizenEmissionReport[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_CITIZEN_REPORTS, JSON.stringify(reports));
@@ -359,5 +375,16 @@ export function addCitizenReport(report: CitizenEmissionReport): CitizenEmission
   const existing = getStoredCitizenReports();
   const updated = [report, ...existing];
   saveCitizenReports(updated);
+
+  // Asynchronously persist to real database
+  fetch('/api/db/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(report),
+  }).catch((err) => {
+    console.warn('[DbService] Real database sync background notice:', err);
+  });
+
   return updated;
 }
+

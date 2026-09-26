@@ -42,14 +42,16 @@ const FAMOUS_DISTRICTS: CitySearchResult[] = [
 ];
 
 const FAMOUS_CITIES: CitySearchResult[] = [
-  { name: 'Tokyo', country: 'Japan', admin1: 'Tokyo', type: 'city', lat: 35.6762, lon: 139.6503 },
-  { name: 'New York', country: 'United States', admin1: 'NY', type: 'city', lat: 40.7128, lon: -74.006 },
-  { name: 'London', country: 'United Kingdom', admin1: 'England', type: 'city', lat: 51.5074, lon: -0.1278 },
-  { name: 'Paris', country: 'France', admin1: 'Île-de-France', type: 'city', lat: 48.8566, lon: 2.3522 },
-  { name: 'Dubai', country: 'UAE', type: 'city', lat: 25.2048, lon: 55.2708 },
-  { name: 'Sydney', country: 'Australia', admin1: 'NSW', type: 'city', lat: -33.8688, lon: 151.2093 },
-  { name: 'Reykjavik', country: 'Iceland', type: 'city', lat: 64.1466, lon: -21.9426 },
-  { name: 'Rio de Janeiro', country: 'Brazil', type: 'city', lat: -22.9068, lon: -43.1729 },
+  { name: 'New Delhi', country: 'India', admin1: 'Delhi', type: 'city', lat: 28.6139, lon: 77.2090 },
+  { name: 'Beijing', country: 'China', admin1: 'Beijing', type: 'city', lat: 39.9042, lon: 116.4074 },
+  { name: 'Moscow', country: 'Russia', admin1: 'Moscow Federal City', type: 'city', lat: 55.7558, lon: 37.6173 },
+  { name: 'Brasília', country: 'Brazil', admin1: 'Federal District', type: 'city', lat: -15.7975, lon: -47.8919 },
+  { name: 'Pretoria', country: 'South Africa', admin1: 'Gauteng', type: 'city', lat: -25.7479, lon: 28.2293 },
+  { name: 'Cairo', country: 'Egypt', admin1: 'Cairo', type: 'city', lat: 30.0444, lon: 31.2357 },
+  { name: 'Abu Dhabi', country: 'UAE', admin1: 'Abu Dhabi', type: 'city', lat: 24.4539, lon: 54.3773 },
+  { name: 'Riyadh', country: 'Saudi Arabia', admin1: 'Riyadh', type: 'city', lat: 24.7136, lon: 46.6753 },
+  { name: 'Tehran', country: 'Iran', admin1: 'Tehran', type: 'city', lat: 35.6892, lon: 51.3890 },
+  { name: 'Addis Ababa', country: 'Ethiopia', admin1: 'Addis Ababa', type: 'city', lat: 9.0320, lon: 38.7469 },
 ];
 
 export const CitySearchBar: React.FC<CitySearchBarProps> = ({

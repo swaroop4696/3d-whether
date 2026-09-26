@@ -18,7 +18,8 @@ import { IntelligenceDock } from './components/IntelligenceDock';
 import { IntelDetailModal, type SelectedIntelEntity } from './components/IntelDetailModal';
 import { CitizenEmissionReportModal } from './components/CitizenEmissionReportModal';
 import { EconomicCorridorFastHubModal } from './components/EconomicCorridorFastHubModal';
-import { getStoredCitizenReports } from './services/corridorAndEmissionService';
+import { GeminiAssistantModal } from './components/GeminiAssistantModal';
+import { getStoredCitizenReports, fetchServerDbReports } from './services/corridorAndEmissionService';
 import {
   fetchWeatherData,
   fetchAqiData,
@@ -67,6 +68,7 @@ export default function App() {
   );
   const [isCitizenReportOpen, setIsCitizenReportOpen] = useState<boolean>(false);
   const [isCorridorHubOpen, setIsCorridorHubOpen] = useState<boolean>(false);
+  const [isGeminiAssistantOpen, setIsGeminiAssistantOpen] = useState<boolean>(false);
 
   // Spatial Intelligence Feeds State
   const [fires, setFires] = useState<FireHotspot[]>([]);
@@ -105,6 +107,11 @@ export default function App() {
       }
     };
     loadIntel();
+    fetchServerDbReports().then((data) => {
+      if (mounted && Array.isArray(data) && data.length > 0) {
+        setCitizenReports(data);
+      }
+    });
     const interval = setInterval(loadIntel, 60000);
     return () => {
       mounted = false;
@@ -294,9 +301,9 @@ export default function App() {
    * Dedicated location update for 3D View (does NOT trigger Weather Card)
    */
   const handle3DLocationSelected = useCallback((newLat: number, newLon: number, newName: string) => {
-    setCurrentLat(newLat);
-    setCurrentLon(newLon);
-    setCityName(newName);
+    setCurrentLat((prev) => (prev === newLat ? prev : newLat));
+    setCurrentLon((prev) => (prev === newLon ? prev : newLon));
+    setCityName((prev) => (prev === newName ? prev : newName));
   }, []);
 
   /**
@@ -397,7 +404,7 @@ export default function App() {
           earthquakes.find(
             (e) => Math.abs(e.lat - lat) < 0.15 && Math.abs(e.lon - lon) < 0.15
           ) || earthquakes[0];
-        if (matched) {
+        if (matched && viewMode !== 'godseye3d') {
           setSelectedIntelEntity({ type: 'earthquakes', earthquake: matched });
         }
       } else if (category === 'fires') {
@@ -406,7 +413,7 @@ export default function App() {
           fires.find(
             (f) => Math.abs(f.lat - lat) < 0.15 && Math.abs(f.lon - lon) < 0.15
           ) || fires[0];
-        if (matched) {
+        if (matched && viewMode !== 'godseye3d') {
           setSelectedIntelEntity({ type: 'fires', fire: matched });
         }
       } else if (category === 'flights') {
@@ -415,12 +422,12 @@ export default function App() {
           flights.find(
             (fl) => Math.abs(fl.lat - lat) < 0.5 && Math.abs(fl.lon - lon) < 0.5
           ) || flights[0];
-        if (matched) {
+        if (matched && viewMode !== 'godseye3d') {
           setSelectedIntelEntity({ type: 'flights', flight: matched });
         }
       }
     },
-    [earthquakes, fires, flights, loadLocationData]
+    [earthquakes, fires, flights, loadLocationData, viewMode]
   );
 
   /**
@@ -551,6 +558,7 @@ export default function App() {
         onOpenCitizenReports={() => setIsCitizenReportOpen(true)}
         onOpenCorridorHub={() => setIsCorridorHubOpen(true)}
         citizenReportCount={citizenReports.length}
+        onOpenGeminiAssistant={() => setIsGeminiAssistantOpen(true)}
       />
 
       {/* 5. Weather GPT Floating Minimalist Glass Card - Hidden in 3D Mode */}
@@ -574,14 +582,17 @@ export default function App() {
         />
       )}
 
-      {/* 6. Gemini AI Spatial Intelligence Copilot Bar */}
-      <SpatialCopilotBar
-        currentLat={currentLat}
-        currentLon={currentLon}
-        currentLocationName={cityName}
-        currentMode={viewMode}
-        onExecuteAction={handleExecuteCopilotAction}
-      />
+      {/* 6. Gemini AI Spatial Intelligence Copilot Bar (Hidden in 3D God's Eye view to not obstruct the screen) */}
+      {viewMode !== 'godseye3d' && (
+        <SpatialCopilotBar
+          currentLat={currentLat}
+          currentLon={currentLon}
+          currentLocationName={cityName}
+          currentMode={viewMode}
+          onExecuteAction={handleExecuteCopilotAction}
+          onOpenChatOrVoice={() => setIsGeminiAssistantOpen(true)}
+        />
+      )}
 
       {/* 7. Real-Time Spatial Intelligence Field Telemetry Modal (Earthquakes, Fires, Flights) */}
       <IntelDetailModal
@@ -591,6 +602,7 @@ export default function App() {
           if (mode) {
             setMeshIntelMode(mode);
           }
+          setSelectedIntelEntity(null);
           setIsCardOpen(false);
           setCurrentLat(targetLat);
           setCurrentLon(targetLon);
@@ -622,6 +634,29 @@ export default function App() {
         onClose={() => setIsCorridorHubOpen(false)}
         onFlyToLocation={(tLat, tLon, tName) => {
           loadLocationData(tLat, tLon, tName, true, true);
+        }}
+      />
+
+      {/* 10. Gemini Planetary Copilot: Multi-Turn Chatbot & gemini-3.8-live Voice Modal */}
+      <GeminiAssistantModal
+        isOpen={isGeminiAssistantOpen}
+        onClose={() => setIsGeminiAssistantOpen(false)}
+        currentLat={currentLat}
+        currentLon={currentLon}
+        currentLocationName={cityName || 'Orbital Vantage'}
+        currentMode={viewMode}
+        onExecuteAction={(action) => {
+          if (action.action === 'flyTo' && action.targetLocation) {
+            if (action.targetLocation.lat && action.targetLocation.lon) {
+              loadLocationData(action.targetLocation.lat, action.targetLocation.lon, action.targetLocation.name, true, true);
+            } else if (action.targetLocation.name) {
+              handleSelectCity(action.targetLocation.name);
+            }
+          } else if (action.action === 'toggleLayer' && action.layer) {
+            handleToggleLayer(action.layer);
+          } else if (action.action === 'setMode' && action.mode) {
+            handleSelectViewMode(action.mode);
+          }
         }}
       />
     </main>

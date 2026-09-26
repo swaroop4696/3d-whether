@@ -198,7 +198,7 @@ export const IntelDetailModal: React.FC<IntelDetailModalProps> = ({
                 }}
                 className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-lg cursor-pointer"
               >
-                <Activity className="w-4 h-4" />
+                <Activity className="w-4 h-4 text-black" />
                 <span>Inspect 3D Earthquake Fault & Epicenter</span>
               </button>
 
@@ -295,7 +295,7 @@ export const IntelDetailModal: React.FC<IntelDetailModalProps> = ({
                 }}
                 className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-orange-500 hover:bg-orange-400 text-black font-bold text-xs transition-all shadow-lg cursor-pointer"
               >
-                <Flame className="w-4 h-4" />
+                <Flame className="w-4 h-4 text-black" />
                 <span>Inspect 3D Wildfire Mesh</span>
               </button>
 

@@ -28,6 +28,10 @@ import {
   ShieldAlert,
   Zap,
   Activity,
+  ChevronUp,
+  ChevronDown,
+  PanelLeft,
+  PanelRight,
 } from 'lucide-react';
 import type { FireHotspot, EarthquakeData, LiveFlight, IntelligenceLayerType, MeshIntelMode } from '../types';
 
@@ -274,6 +278,421 @@ const createCircleGlowTexture = (
   return tex;
 };
 
+// Procedural High-Fidelity Fluid Flame Tongue Texture (Volumetric combustion gradient)
+const createFluidFlameTongueTexture = (): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // Vertical flame gradient: incandescent white-hot base -> fiery gold -> vivid orange -> crimson tip -> transparent
+  const grad = ctx.createLinearGradient(64, 256, 64, 0);
+  grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)'); // White-hot combustion
+  grad.addColorStop(0.18, 'rgba(255, 235, 120, 0.98)'); // Blazing yellow
+  grad.addColorStop(0.48, 'rgba(249, 115, 22, 0.88)'); // Hot flame orange
+  grad.addColorStop(0.78, 'rgba(220, 38, 38, 0.55)'); // Licking red tongue
+  grad.addColorStop(1.0, 'rgba(120, 20, 0, 0.0)'); // Dissolving heat wisp
+
+  // Draw natural flame droplet shape
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(64, 10);
+  ctx.bezierCurveTo(95, 80, 115, 170, 110, 220);
+  ctx.bezierCurveTo(105, 250, 75, 256, 64, 256);
+  ctx.bezierCurveTo(53, 256, 23, 250, 18, 220);
+  ctx.bezierCurveTo(13, 170, 33, 80, 64, 10);
+  ctx.closePath();
+  ctx.fill();
+
+  // Core incandescent inner tongue
+  const innerGrad = ctx.createLinearGradient(64, 256, 64, 60);
+  innerGrad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+  innerGrad.addColorStop(0.5, 'rgba(255, 245, 160, 0.92)');
+  innerGrad.addColorStop(1.0, 'rgba(255, 180, 0, 0.0)');
+  ctx.fillStyle = innerGrad;
+  ctx.beginPath();
+  ctx.moveTo(64, 70);
+  ctx.bezierCurveTo(80, 120, 90, 180, 85, 225);
+  ctx.bezierCurveTo(80, 250, 68, 256, 64, 256);
+  ctx.bezierCurveTo(60, 256, 48, 250, 43, 225);
+  ctx.bezierCurveTo(38, 180, 48, 120, 64, 70);
+  ctx.closePath();
+  ctx.fill();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// Procedural Minecraft-style Voxel Lava Particle Texture (Crisp pixelated ember with incandescent hot core)
+const createMinecraftVoxelParticleTexture = (): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // Outer ambient heat halo
+  ctx.fillStyle = 'rgba(255, 85, 0, 0.35)';
+  ctx.fillRect(0, 0, 32, 32);
+
+  // Minecraft pixelated ember border
+  ctx.fillStyle = '#ea580c'; // Fiery orange border
+  ctx.fillRect(4, 4, 24, 24);
+
+  // Core magma molten body
+  ctx.fillStyle = '#f97316';
+  ctx.fillRect(6, 6, 20, 20);
+
+  // Blazing incandescent yellow center
+  ctx.fillStyle = '#fde047';
+  ctx.fillRect(10, 10, 12, 12);
+
+  // White-hot center spark
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(12, 12, 8, 8);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter; // True pixelated Minecraft voxel aesthetic!
+  tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// Clean Harmonic Concentric Seismic Wavefront Texture (Soft physical compression gradient)
+const createHarmonicSeismicWaveTexture = (color = '#38bdf8'): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const cx = 64;
+  const cy = 64;
+  const grad = ctx.createRadialGradient(cx, cy, 38, cx, cy, 62);
+  grad.addColorStop(0.0, 'transparent');
+  grad.addColorStop(0.5, color);
+  grad.addColorStop(1.0, 'transparent');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 62, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// Procedural Lush Green Forest & Meadow Terrain Texture with Localized Burn Hearth
+const createLushWildfireTerrainTexture = (burnRadius = 110): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // 1. Lush Green Forest Grass & Meadow Base
+  ctx.fillStyle = '#2d6a4f';
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // Natural green meadow patches & moss variations
+  for (let i = 0; i < 90; i++) {
+    const px = Math.random() * 1024;
+    const py = Math.random() * 1024;
+    const pr = 40 + Math.random() * 120;
+    const grad = ctx.createRadialGradient(px, py, 6, px, py, pr);
+    grad.addColorStop(0, i % 3 === 0 ? '#40916c' : i % 2 === 0 ? '#1b4332' : '#52b788');
+    grad.addColorStop(0.7, '#2d6a4f');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+
+  // Meadow wildflowers (colorful natural speckles)
+  for (let f = 0; f < 150; f++) {
+    const fx = Math.random() * 1024;
+    const fy = Math.random() * 1024;
+    ctx.fillStyle = f % 3 === 0 ? '#fef08a' : f % 2 === 0 ? '#fed7aa' : '#ffffff';
+    ctx.beginPath();
+    ctx.arc(fx, fy, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Forest dirt trail winding through the meadow
+  ctx.strokeStyle = '#785938';
+  ctx.lineWidth = 20;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(60, 0);
+  ctx.bezierCurveTo(240, 320, 380, 580, 290, 1024);
+  ctx.stroke();
+
+  // Localized Burn Scar in the central hearth (fading naturally into green grass)
+  const cx = 512;
+  const cy = 512;
+  const burnGrad = ctx.createRadialGradient(cx, cy, 15, cx, cy, burnRadius * 2.2);
+  burnGrad.addColorStop(0, '#141416'); // Dark charred soot & ash
+  burnGrad.addColorStop(0.35, '#291d18'); // Scorched peat earth
+  burnGrad.addColorStop(0.65, '#3d3024'); // Heat-damaged border
+  burnGrad.addColorStop(1, 'transparent'); // Fades seamlessly into lush green grass!
+  ctx.fillStyle = burnGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, burnRadius * 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Subtle glowing ember fissures inside the central hearth
+  ctx.strokeStyle = '#ea580c';
+  ctx.lineWidth = 1.8;
+  for (let e = 0; e < 18; e++) {
+    ctx.beginPath();
+    let ex = cx + (Math.random() - 0.5) * (burnRadius * 0.9);
+    let ey = cy + (Math.random() - 0.5) * (burnRadius * 0.9);
+    ctx.moveTo(ex, ey);
+    for (let k = 0; k < 4; k++) {
+      ex += (Math.random() - 0.5) * 22;
+      ey += (Math.random() - 0.5) * 22;
+      ctx.lineTo(ex, ey);
+    }
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// Procedural Dense Oily Black Toxic Smoke Texture for Burning Tire Piles
+const createToxicBlackSmokeTexture = (): THREE.CanvasTexture => {
+  return createCircleGlowTexture(
+    [
+      { offset: 0.0, color: 'rgba(10, 10, 14, 0.95)' },
+      { offset: 0.35, color: 'rgba(24, 24, 30, 0.82)' },
+      { offset: 0.72, color: 'rgba(42, 42, 50, 0.42)' },
+      { offset: 1.0, color: 'rgba(0, 0, 0, 0.0)' },
+    ],
+    128
+  );
+};
+
+// Procedural Normal Countryside Landscape Texture (Green grass meadows, country asphalt road, and magnitude-based fissures)
+const createNormalLandTexture = (hasCracks: boolean, crackSeverity: number): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // 1. Lush Green Countryside Pasture & Meadows
+  ctx.fillStyle = '#2d6a4f';
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // Varied rolling turf textures
+  for (let i = 0; i < 70; i++) {
+    const px = Math.random() * 1024;
+    const py = Math.random() * 1024;
+    const pr = 40 + Math.random() * 95;
+    const grad = ctx.createRadialGradient(px, py, 4, px, py, pr);
+    grad.addColorStop(0, i % 2 === 0 ? '#40916c' : '#1b4332');
+    grad.addColorStop(0.7, i % 3 === 0 ? '#52b788' : '#2d6a4f');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+
+  // Fertile soil & agricultural field patches
+  for (let i = 0; i < 9; i++) {
+    const sx = 80 + Math.random() * 820;
+    const sy = 80 + Math.random() * 820;
+    const sw = 100 + Math.random() * 160;
+    const sh = 70 + Math.random() * 120;
+    ctx.fillStyle = '#5c4033';
+    ctx.fillRect(sx, sy, sw, sh);
+    // Tilled soil furrow lines
+    ctx.strokeStyle = '#4a3328';
+    ctx.lineWidth = 2;
+    for (let f = sy + 6; f < sy + sh; f += 9) {
+      ctx.beginPath();
+      ctx.moveTo(sx, f);
+      ctx.lineTo(sx + sw, f);
+      ctx.stroke();
+    }
+  }
+
+  // 2. Realistic Two-Lane Paved Asphalt Country Highway
+  // Road curves gracefully across the countryside landscape
+  ctx.strokeStyle = '#27272a'; // Deep asphalt charcoal
+  ctx.lineWidth = 58;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 480);
+  ctx.bezierCurveTo(340, 520, 680, 440, 1024, 500);
+  ctx.stroke();
+
+  // Dirt & gravel road shoulders
+  ctx.strokeStyle = '#78716c';
+  ctx.lineWidth = 66;
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.beginPath();
+  ctx.moveTo(0, 480);
+  ctx.bezierCurveTo(340, 520, 680, 440, 1024, 500);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // White outer edge boundary lane lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 458);
+  ctx.bezierCurveTo(340, 498, 680, 418, 1024, 478);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, 502);
+  ctx.bezierCurveTo(340, 542, 680, 462, 1024, 522);
+  ctx.stroke();
+
+  // Double Yellow Solid Highway Centerline
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 478);
+  ctx.bezierCurveTo(340, 518, 680, 438, 1024, 498);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, 482);
+  ctx.bezierCurveTo(340, 522, 680, 442, 1024, 502);
+  ctx.stroke();
+
+  // 3. Magnitude-Dependent Seismic Road & Soil Fractures
+  if (hasCracks && crackSeverity > 0) {
+    const crackWidth = Math.min(22, 2.5 + crackSeverity * 3.2);
+    ctx.strokeStyle = '#18181b'; // Deep jagged fissure chasm
+    ctx.lineWidth = crackWidth;
+    ctx.beginPath();
+    ctx.moveTo(220, 0);
+    let curX = 220;
+    for (let curY = 0; curY <= 1024; curY += 24) {
+      curX += (Math.random() - 0.48) * (20 + crackSeverity * 8);
+      ctx.lineTo(curX, curY);
+    }
+    ctx.stroke();
+
+    // Branching tension cracks along road asphalt
+    if (crackSeverity >= 2) {
+      ctx.lineWidth = Math.max(1.5, crackWidth * 0.4);
+      for (let b = 0; b < 8; b++) {
+        let bx = 280 + b * 75;
+        let by = 380 + (b % 3) * 110;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        for (let s = 0; s < 7; s++) {
+          bx += (Math.random() - 0.5) * 40;
+          by += (Math.random() - 0.5) * 40;
+          ctx.lineTo(bx, by);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // High Magnitude glowing crustal friction stress inside the fault
+    if (crackSeverity >= 3) {
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';
+      ctx.lineWidth = 3.0;
+      ctx.beginPath();
+      ctx.moveTo(220, 0);
+      let cx = 220;
+      for (let cy = 0; cy <= 1024; cy += 32) {
+        cx += (Math.random() - 0.48) * 20;
+        ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// Procedural Lush Greenery Meadow & Forest Terrain Texture with localized ember clearing
+const createGreeneryForestTexture = (burnRadius = 80): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // 1. Lush Green Forest Grass & Woodland Undergrowth
+  ctx.fillStyle = '#38a169';
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // Natural green meadow patches & moss variations
+  for (let i = 0; i < 90; i++) {
+    const px = Math.random() * 1024;
+    const py = Math.random() * 1024;
+    const pr = 35 + Math.random() * 110;
+    const grad = ctx.createRadialGradient(px, py, 5, px, py, pr);
+    grad.addColorStop(0, i % 3 === 0 ? '#48bb78' : i % 2 === 0 ? '#2f855a' : '#68d391');
+    grad.addColorStop(0.7, '#38a169');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+
+  // Meadow wildflowers (tiny colorful speckles across the green fields)
+  for (let f = 0; f < 120; f++) {
+    const fx = Math.random() * 1024;
+    const fy = Math.random() * 1024;
+    ctx.fillStyle = f % 3 === 0 ? '#fef08a' : f % 2 === 0 ? '#fed7aa' : '#ffffff';
+    ctx.beginPath();
+    ctx.arc(fx, fy, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Forest dirt trail winding through the meadow
+  ctx.strokeStyle = '#785938';
+  ctx.lineWidth = 22;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(80, 0);
+  ctx.bezierCurveTo(280, 360, 420, 620, 320, 1024);
+  ctx.stroke();
+
+  // Localized Campfire / Fire clearing in the center (soft transition into lush grass)
+  const cx = 512;
+  const cy = 512;
+  const burnGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, burnRadius * 2.2);
+  burnGrad.addColorStop(0, '#1c1917'); // Dark charred hearth
+  burnGrad.addColorStop(0.35, '#451a03'); // Warm burnt earth
+  burnGrad.addColorStop(0.65, '#523e2b'); // Peat boundary
+  burnGrad.addColorStop(1, 'transparent'); // Fades into lush green grass!
+  ctx.fillStyle = burnGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, burnRadius * 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Subtle glowing ember fissures only inside the central hearth
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth = 1.6;
+  for (let e = 0; e < 12; e++) {
+    ctx.beginPath();
+    let ex = cx + (Math.random() - 0.5) * (burnRadius * 0.7);
+    let ey = cy + (Math.random() - 0.5) * (burnRadius * 0.7);
+    ctx.moveTo(ex, ey);
+    for (let k = 0; k < 3; k++) {
+      ex += (Math.random() - 0.5) * 16;
+      ey += (Math.random() - 0.5) * 16;
+      ctx.lineTo(ex, ey);
+    }
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+};
+
 export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
   lat,
   lon,
@@ -333,13 +752,16 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
   const localizedEarthquake = useMemo<EarthquakeData | null>(() => {
     if (lat == null || lon == null) return null;
+    const cleanPlace = (locationName || 'Regional Tectonic Fault')
+      .replace(/(\s*(?:Sensor Node|Seismic Station))+$/gi, '')
+      .trim();
     return {
       id: `local-eq-${Math.abs(Math.round(lat * 100))}`,
       lat: lat,
       lon: lon,
-      magnitude: 3.6,
-      depth: 14.5,
-      place: `${locationName || 'Regional Tectonic Fault'} Sensor Node`,
+      magnitude: 4.8,
+      depth: 12.0,
+      place: `${cleanPlace || 'Regional Fault'} Seismic Station`,
       time: Date.now() - 3600000,
       tsunami: 0,
       status: 'reviewed',
@@ -494,6 +916,95 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     mag: number;
   } | null>(null);
 
+  // Scene Illumination & Environment References
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+
+  // Interactive Action Triggers
+  const seismicTriggerRef = useRef<number>(0);
+  const fireSurgeTriggerRef = useRef<number>(0);
+  const [seismicActive, setSeismicActive] = useState(false);
+  const [fireSurgeActive, setFireSurgeActive] = useState(false);
+
+  // Fire Scene Variation: 'all' (combined trees, tires, debris & greenery) | 'trees' | 'tires' | 'debris'
+  const [fireSceneType, setFireSceneType] = useState<'all' | 'trees' | 'tires' | 'debris'>('all');
+  // Interactive Fire Intensity (MW FRP) - dynamically scales flame volume, ember updrafts, smoke buoyancy
+  const [interactiveFireIntensity, setInteractiveFireIntensity] = useState<number | null>(null);
+  // Earthquake custom interactive magnitude (dynamically changes smooth ground shaking on normal land)
+  const [interactiveMagnitude, setInteractiveMagnitude] = useState<number | null>(null);
+
+  // Floating Telemetry HUD Positioning & Minimization State
+  const [isTelemetryCollapsed, setIsTelemetryCollapsed] = useState(false);
+  const [telemetryDockSide, setTelemetryDockSide] = useState<'right' | 'left'>('right');
+
+  // Live References for zero-latency 60FPS animation updates without rebuilding meshes
+  const intelModeRef = useRef<MeshIntelMode>(intelMode);
+  useEffect(() => {
+    intelModeRef.current = intelMode;
+  }, [intelMode]);
+
+  const liveMagnitudeRef = useRef<number>(6.0);
+  useEffect(() => {
+    liveMagnitudeRef.current = interactiveMagnitude ?? (typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude : 6.0);
+  }, [interactiveMagnitude, currentEarthquake]);
+
+  // References for Burning Objects in Wildfire
+  const burningTreesRef = useRef<{
+    trees: {
+      group: THREE.Group;
+      foliageMeshes: THREE.Mesh[];
+      flamePoints?: THREE.Points;
+      baseX: number;
+      baseZ: number;
+    }[];
+  } | null>(null);
+
+  const burningTiresRef = useRef<{
+    tiresGroup: THREE.Group;
+    denseSmokePoints: THREE.Points;
+    denseSmokeProgress: Float32Array;
+    denseSmokeSpeeds: Float32Array;
+    denseSmokeAngles: Float32Array;
+    denseSmokeRadii: Float32Array;
+    denseSmokeCount: number;
+    drippingTarPoints: THREE.Points;
+    drippingTarPosY: Float32Array;
+    drippingTarSpeeds: Float32Array;
+    drippingTarBaseX: Float32Array;
+    drippingTarBaseZ: Float32Array;
+    tarCount: number;
+  } | null>(null);
+
+  const burningDebrisRef = useRef<{
+    debrisGroup: THREE.Group;
+    vortexPoints: THREE.Points;
+    vortexSpeeds: Float32Array;
+    vortexAngles: Float32Array;
+    vortexRadii: Float32Array;
+    vortexCount: number;
+  } | null>(null);
+
+  // References for Normal Land Earthquake Shaking & Deformation
+  const normalLandWaveRef = useRef<{
+    mesh: THREE.Mesh;
+    basePositions: Float32Array;
+    vertexCount: number;
+    magnitude: number;
+  } | null>(null);
+
+  const landObjectsRef = useRef<{
+    trees: { group: THREE.Group; baseY: number; phase: number; freq: number }[];
+    poles: { group: THREE.Group; baseY: number; phase: number; sparkLine?: THREE.Line }[];
+    structures: { group: THREE.Group; baseY: number; baseZ: number; freq: number; isBarn?: boolean }[];
+    cars: { group: THREE.Group; baseY: number; phase: number }[];
+    roadSegments?: {
+      roadPlateWest: THREE.Group;
+      roadPlateEast: THREE.Group;
+      buckledSlabs: { mesh: THREE.Mesh; baseY: number; baseRotZ: number; baseRotX: number }[];
+      faultFissure?: THREE.Line;
+    };
+  } | null>(null);
+
   // Camera Spherical Position
   const cameraAngleRef = useRef({
     theta: Math.PI / 4,
@@ -505,6 +1016,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
   const isDraggingRef = useRef(false);
   const isRightDraggingRef = useRef(false);
   const previousMousePositionRef = useRef({ x: 0, y: 0 });
+  const hasFramedInitialCameraRef = useRef(false);
 
   // Update Camera Vector
   const updateCamera = useCallback(() => {
@@ -866,14 +1378,19 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
   /**
    * BUILD ACCURATE 3D WILDFIRE HOTSPOT MESH
-   * Procedural Photorealistic Combustion Physics:
-   * - Volumetric fluid flame billows with incandescent cores (no geometric cones)
-   * - Ascending convective thermal spark & ember vortex climbing 500m
-   * - Atmospheric dark smoke plume expanding with altitude and wind sheer
-   * - Charred burn scar with live smoldering coal bed and glowing firefront line
-   * - Multi-octave combustion lighting flicker
+   * Clean, Photorealistic Combustion Physics with Lush Greenery Environment:
+   * - Lush green forest & meadow terrain with central charred burn scar
+   * - Living green tree perimeter framing the scene with vibrant greenery
+   * - Real burning objects: conifer trees, rubber tire piles, and large quantity of debris
+   * - Scaled dynamically based on Fire Radiative Power (FRP) intensity
+   * - Fluid flame tongues, convective thermal ember vortex, and buoyant dark smoke plumes
+   * - Warm dynamic firelight illuminating trees and landscape
    */
-  const build3DWildfireMesh = useCallback((fire: FireHotspot) => {
+  const build3DWildfireMesh = useCallback((
+    fire: FireHotspot,
+    overrideType?: 'all' | 'trees' | 'tires' | 'debris',
+    overrideIntensity?: number
+  ) => {
     if (!sceneRef.current) return;
 
     if (targetGroupRef.current) {
@@ -898,79 +1415,411 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     earthquakeHypocenterRef.current = null;
     earthquakeEpicenterRef.current = null;
     seismogramTelemetryRef.current = null;
+    burningTreesRef.current = null;
+    burningTiresRef.current = null;
+    burningDebrisRef.current = null;
 
-    // 1. Topographic Terrain Ground with Burn Scar
+    const activeSceneType = overrideType || fireSceneType;
+    const frpMW = overrideIntensity ?? (interactiveFireIntensity ?? (fire.frp || 150));
+    const perimeterRadius = Math.max(50, Math.min(220, Math.sqrt(frpMW) * 8.0));
+
+    // 1. Lush Rolling Green Landscape with Localized Hearth Depression
     const terrainGeo = new THREE.PlaneGeometry(2400, 2400, 64, 64);
     const pos = terrainGeo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vy = pos.getY(i);
       const distFromCenter = Math.sqrt(vx * vx + vy * vy);
-      // Natural rolling hills elevation
+      // Gentle natural rolling hills elevation
       const elevation =
-        Math.sin(vx * 0.008) * 18 +
-        Math.cos(vy * 0.008) * 18 +
-        Math.sin(vx * 0.02 + vy * 0.02) * 8;
-      // Gentle valley depression at fire front
-      pos.setZ(i, elevation - Math.max(0, 15 - distFromCenter * 0.03));
+        Math.sin(vx * 0.007) * 16 +
+        Math.cos(vy * 0.007) * 16 +
+        Math.sin(vx * 0.018 + vy * 0.018) * 7;
+      // Gentle natural valley depression at the clearing
+      pos.setZ(i, elevation - Math.max(0, 14 - distFromCenter * 0.035));
     }
     terrainGeo.computeVertexNormals();
 
-    // Burn Scar Texture via Canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-    // Forest / Soil base
-    ctx.fillStyle = '#111812';
-    ctx.fillRect(0, 0, 512, 512);
-
-    // Charred Blackened Burn Scar in Center
-    const gradient = ctx.createRadialGradient(256, 256, 10, 256, 256, 190);
-    gradient.addColorStop(0, '#070707'); // Ash pitch black
-    gradient.addColorStop(0.35, '#180c07'); // Charred ember earth
-    gradient.addColorStop(0.65, '#26170e'); // Scorched boundary
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 512);
-
-    // Glowing Thermal Cracks / Crevices
-    ctx.strokeStyle = '#ea580c';
-    ctx.lineWidth = 1.6;
-    for (let i = 0; i < 24; i++) {
-      ctx.beginPath();
-      let cx = 256 + (Math.random() - 0.5) * 80;
-      let cy = 256 + (Math.random() - 0.5) * 80;
-      ctx.moveTo(cx, cy);
-      for (let j = 0; j < 5; j++) {
-        cx += (Math.random() - 0.5) * 28;
-        cy += (Math.random() - 0.5) * 28;
-        ctx.lineTo(cx, cy);
-      }
-      ctx.stroke();
-    }
-
-    const terrainTexture = new THREE.CanvasTexture(canvas);
+    const terrainTexture = createLushWildfireTerrainTexture(perimeterRadius * 0.65);
     const terrainMat = new THREE.MeshStandardMaterial({
       map: terrainTexture,
-      roughness: 0.85,
-      metalness: 0.1,
+      roughness: 0.82,
+      metalness: 0.08,
     });
     const terrain = new THREE.Mesh(terrainGeo, terrainMat);
     terrain.rotation.x = -Math.PI / 2;
     terrain.receiveShadow = true;
     group.add(terrain);
 
-    // 2. NASA FIRMS Fire Radiative Power (FRP) Concentric Isolines
-    const frpMW = fire.frp || 150;
-    const perimeterRadius = Math.max(45, Math.min(180, Math.sqrt(frpMW) * 8.5));
+    // 2. HEALTHY LIVING GREEN FOREST RING (Lush Greenery Framing Perimeter)
+    // 42 vibrant green living pines and deciduous trees surrounding the meadow
+    const greenForestGroup = new THREE.Group();
+    const livingTrunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.9 });
+    const livingPineFoliage1 = new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.85 });
+    const livingPineFoliage2 = new THREE.MeshStandardMaterial({ color: 0x1b4332, roughness: 0.85 });
+    const livingOakFoliage = new THREE.MeshStandardMaterial({ color: 0x40916c, roughness: 0.85 });
 
+    for (let g = 0; g < 42; g++) {
+      const treeAngle = (g / 42) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+      const treeDist = perimeterRadius + 75 + Math.random() * 240;
+      const gx = Math.cos(treeAngle) * treeDist;
+      const gz = Math.sin(treeAngle) * treeDist;
+
+      const treeGroup = new THREE.Group();
+      const isPine = g % 3 !== 0;
+      const tHeight = 24 + Math.random() * 16;
+      const trunkMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.4, tHeight, 7), livingTrunkMat);
+      trunkMesh.position.y = tHeight / 2;
+      treeGroup.add(trunkMesh);
+
+      if (isPine) {
+        // Multi-tier healthy pine canopy
+        const foliageMat = g % 2 === 0 ? livingPineFoliage1 : livingPineFoliage2;
+        const tiers = 3;
+        for (let k = 0; k < tiers; k++) {
+          const coneR = (9.5 - k * 2.2) * (tHeight / 28);
+          const coneH = (12 - k * 1.8) * (tHeight / 28);
+          const coneMesh = new THREE.Mesh(new THREE.ConeGeometry(coneR, coneH, 7), foliageMat);
+          coneMesh.position.y = tHeight * 0.45 + k * (coneH * 0.65);
+          treeGroup.add(coneMesh);
+        }
+      } else {
+        // Broadleaf deciduous round crown
+        const crownMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(11, 1), livingOakFoliage);
+        crownMesh.position.y = tHeight + 4;
+        treeGroup.add(crownMesh);
+      }
+
+      treeGroup.position.set(gx, 2.0, gz);
+      treeGroup.rotation.y = Math.random() * Math.PI * 2;
+      treeGroup.rotation.z = (Math.random() - 0.5) * 0.08;
+      greenForestGroup.add(treeGroup);
+    }
+    group.add(greenForestGroup);
+
+    // 3. BURNING OBJECTS: Trees, Tires, and Huge Quantity of Debris
+    const shouldBuildTrees = activeSceneType === 'all' || activeSceneType === 'trees';
+    const shouldBuildTires = activeSceneType === 'all' || activeSceneType === 'tires';
+    const shouldBuildDebris = activeSceneType === 'all' || activeSceneType === 'debris';
+
+    // 3a. Burning Conifer Trees (Charred trunks, glowing embers, climbing flame tongues)
+    if (shouldBuildTrees) {
+      const treeCount = activeSceneType === 'all' ? 10 : 16;
+      const treesData: {
+        group: THREE.Group;
+        foliageMeshes: THREE.Mesh[];
+        flamePoints?: THREE.Points;
+        baseX: number;
+        baseZ: number;
+      }[] = [];
+
+      const charredTrunkMat = new THREE.MeshStandardMaterial({
+        color: 0x141416, // Black charred bark
+        roughness: 0.95,
+        emissive: 0x991b1b, // Deep smoldering ember heat inside cracks
+        emissiveIntensity: 0.75,
+      });
+
+      const burningFoliageMat = new THREE.MeshStandardMaterial({
+        color: 0x1c1917,
+        roughness: 0.85,
+        emissive: 0xea580c, // Glowing fiery foliage needles
+        emissiveIntensity: 0.85,
+      });
+
+      const burningTreeGroup = new THREE.Group();
+      for (let t = 0; t < treeCount; t++) {
+        const tGroup = new THREE.Group();
+        const angle = (t / treeCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const dist = 35 + Math.random() * (perimeterRadius * 0.6);
+        const tx = Math.cos(angle) * dist;
+        const tz = Math.sin(angle) * dist;
+
+        const treeHeight = 26 + Math.random() * 14;
+        const trunkMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.6, treeHeight, 7), charredTrunkMat);
+        trunkMesh.position.y = treeHeight / 2;
+        tGroup.add(trunkMesh);
+
+        // Foliage tiers catching fire
+        const foliageMeshes: THREE.Mesh[] = [];
+        const tiers = 3;
+        for (let k = 0; k < tiers; k++) {
+          const coneR = (10 - k * 2.3) * (treeHeight / 28);
+          const coneH = (12 - k * 1.8) * (treeHeight / 28);
+          const coneMesh = new THREE.Mesh(new THREE.ConeGeometry(coneR, coneH, 7), burningFoliageMat);
+          coneMesh.position.y = treeHeight * 0.45 + k * (coneH * 0.65);
+          tGroup.add(coneMesh);
+          foliageMeshes.push(coneMesh);
+        }
+
+        // Animated flame sprite dancing on tree crown
+        const flameTex = createFluidFlameTongueTexture();
+        const tFlameGeo = new THREE.BufferGeometry();
+        tFlameGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, treeHeight + 5, 0]), 3));
+        const tFlameMat = new THREE.PointsMaterial({
+          map: flameTex,
+          size: 26,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const tFlamePoints = new THREE.Points(tFlameGeo, tFlameMat);
+        tGroup.add(tFlamePoints);
+
+        tGroup.position.set(tx, 2.0, tz);
+        tGroup.rotation.z = (Math.random() - 0.5) * 0.12;
+        burningTreeGroup.add(tGroup);
+
+        treesData.push({
+          group: tGroup,
+          foliageMeshes,
+          flamePoints: tFlamePoints,
+          baseX: tx,
+          baseZ: tz,
+        });
+      }
+      group.add(burningTreeGroup);
+      burningTreesRef.current = { trees: treesData };
+    }
+
+    // 3b. Burning Rubber Tire Piles (Toxic smoke columns, orange flame tongues)
+    if (shouldBuildTires) {
+      const tiresGroup = new THREE.Group();
+      const tireGeo = new THREE.TorusGeometry(3.6, 1.3, 10, 20);
+      const tireMat = new THREE.MeshStandardMaterial({
+        color: 0x141416, // Matte charred rubber
+        roughness: 0.95,
+        metalness: 0.1,
+        emissive: 0xea580c, // Glowing hot inner rim
+        emissiveIntensity: 0.65,
+      });
+
+      const pileCenters = activeSceneType === 'all'
+        ? [{ x: -35, z: 25 }, { x: 40, z: -25 }]
+        : [{ x: -35, z: -20 }, { x: 35, z: -15 }, { x: 5, z: 35 }, { x: -15, z: -40 }];
+
+      pileCenters.forEach((center) => {
+        const countInPile = 8;
+        for (let p = 0; p < countInPile; p++) {
+          const tMesh = new THREE.Mesh(tireGeo, tireMat);
+          const py = 1.4 + p * 1.6;
+          const px = center.x + (Math.random() - 0.5) * 8;
+          const pz = center.z + (Math.random() - 0.5) * 8;
+          tMesh.position.set(px, py, pz);
+          tMesh.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.35;
+          tMesh.rotation.y = (Math.random() - 0.5) * 0.4;
+          tMesh.rotation.z = Math.random() * Math.PI;
+          tiresGroup.add(tMesh);
+        }
+
+        // Licking Core Fire Sprite
+        const pFlameGeo = new THREE.BufferGeometry();
+        pFlameGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([center.x, 8, center.z]), 3));
+        const pFlameMat = new THREE.PointsMaterial({
+          map: createFluidFlameTongueTexture(),
+          size: 38,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        tiresGroup.add(new THREE.Points(pFlameGeo, pFlameMat));
+      });
+
+      // Dense Oily Black Smoke Columns Billowing Upward
+      const denseSmokeTex = createToxicBlackSmokeTexture();
+      const denseSmokeCount = activeSceneType === 'all' ? 100 : 160;
+      const dSmokeProg = new Float32Array(denseSmokeCount);
+      const dSmokeSpeeds = new Float32Array(denseSmokeCount);
+      const dSmokeAngles = new Float32Array(denseSmokeCount);
+      const dSmokeRadii = new Float32Array(denseSmokeCount);
+      const dSmokePos = new Float32Array(denseSmokeCount * 3);
+
+      for (let i = 0; i < denseSmokeCount; i++) {
+        dSmokeProg[i] = Math.random();
+        dSmokeSpeeds[i] = 0.007 + Math.random() * 0.014;
+        dSmokeAngles[i] = Math.random() * Math.PI * 2;
+        dSmokeRadii[i] = 8 + Math.random() * 28;
+        const p = dSmokeProg[i];
+        const r = dSmokeRadii[i] + p * 90;
+        dSmokePos[i * 3] = Math.cos(dSmokeAngles[i]) * r + p * 80;
+        dSmokePos[i * 3 + 1] = 6.0 + p * 400;
+        dSmokePos[i * 3 + 2] = Math.sin(dSmokeAngles[i]) * r - p * 50;
+      }
+
+      const dSmokeGeo = new THREE.BufferGeometry();
+      dSmokeGeo.setAttribute('position', new THREE.BufferAttribute(dSmokePos, 3));
+      const dSmokeMat = new THREE.PointsMaterial({
+        map: denseSmokeTex,
+        size: 75,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+      const dSmokePoints = new THREE.Points(dSmokeGeo, dSmokeMat);
+      tiresGroup.add(dSmokePoints);
+
+      // Dripping molten rubber drops
+      const tarCount = 35;
+      const tarProg = new Float32Array(tarCount);
+      const tarSpeeds = new Float32Array(tarCount);
+      const tarBaseX = new Float32Array(tarCount);
+      const tarBaseZ = new Float32Array(tarCount);
+      const tarPos = new Float32Array(tarCount * 3);
+
+      for (let i = 0; i < tarCount; i++) {
+        tarProg[i] = Math.random();
+        tarSpeeds[i] = 0.015 + Math.random() * 0.025;
+        const pile = pileCenters[i % pileCenters.length];
+        tarBaseX[i] = pile.x + (Math.random() - 0.5) * 12;
+        tarBaseZ[i] = pile.z + (Math.random() - 0.5) * 12;
+        tarPos[i * 3] = tarBaseX[i];
+        tarPos[i * 3 + 1] = 2.0 + tarProg[i] * 10;
+        tarPos[i * 3 + 2] = tarBaseZ[i];
+      }
+
+      const tarGeo = new THREE.BufferGeometry();
+      tarGeo.setAttribute('position', new THREE.BufferAttribute(tarPos, 3));
+      const tarMat = new THREE.PointsMaterial({
+        map: createCircleGlowTexture([{ offset: 0, color: '#f97316' }, { offset: 1, color: 'transparent' }], 32),
+        size: 8,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const tarPoints = new THREE.Points(tarGeo, tarMat);
+      tiresGroup.add(tarPoints);
+      group.add(tiresGroup);
+
+      burningTiresRef.current = {
+        tiresGroup,
+        denseSmokePoints: dSmokePoints,
+        denseSmokeProgress: dSmokeProg,
+        denseSmokeSpeeds: dSmokeSpeeds,
+        denseSmokeAngles: dSmokeAngles,
+        denseSmokeRadii: dSmokeRadii,
+        denseSmokeCount,
+        drippingTarPoints: tarPoints,
+        drippingTarPosY: tarProg,
+        drippingTarSpeeds: tarSpeeds,
+        drippingTarBaseX: tarBaseX,
+        drippingTarBaseZ: tarBaseZ,
+        tarCount,
+      };
+    }
+
+    // 3c. Burning Debris in Huge Quantity (Wooden pallets, crates, structural timber beams, steel drums)
+    if (shouldBuildDebris) {
+      const debrisGroup = new THREE.Group();
+
+      // 18 Burning Wooden Cargo Pallets & Crates
+      const crateGeo = new THREE.BoxGeometry(7, 7, 7);
+      const crateMat = new THREE.MeshStandardMaterial({
+        color: 0x3d200b,
+        roughness: 0.9,
+        emissive: 0xea580c,
+        emissiveIntensity: 0.8,
+      });
+
+      for (let cr = 0; cr < 18; cr++) {
+        const crMesh = new THREE.Mesh(crateGeo, crateMat);
+        const crAngle = Math.random() * Math.PI * 2;
+        const crDist = 18 + Math.random() * (perimeterRadius * 0.55);
+        crMesh.position.set(Math.cos(crAngle) * crDist, 3.5, Math.sin(crAngle) * crDist);
+        crMesh.rotation.y = Math.random() * Math.PI;
+        crMesh.rotation.x = (Math.random() - 0.5) * 0.35;
+        debrisGroup.add(crMesh);
+      }
+
+      // 12 Stacked Wooden Cargo Pallets
+      const palletGeo = new THREE.BoxGeometry(12, 2.4, 10);
+      const palletMat = new THREE.MeshStandardMaterial({
+        color: 0x451a03,
+        roughness: 0.92,
+        emissive: 0xc2410c,
+        emissiveIntensity: 0.75,
+      });
+      for (let pl = 0; pl < 12; pl++) {
+        const plMesh = new THREE.Mesh(palletGeo, palletMat);
+        const plAngle = Math.random() * Math.PI * 2;
+        const plDist = 15 + Math.random() * (perimeterRadius * 0.5);
+        plMesh.position.set(Math.cos(plAngle) * plDist, 1.8 + (pl % 2) * 2.4, Math.sin(plAngle) * plDist);
+        plMesh.rotation.y = Math.random() * Math.PI;
+        debrisGroup.add(plMesh);
+      }
+
+      // 14 Steel Fuel Drums & Cylinders (charred, burning)
+      const drumGeo = new THREE.CylinderGeometry(2.8, 2.8, 8, 12);
+      const drumMat = new THREE.MeshStandardMaterial({
+        color: 0x1f2937,
+        metalness: 0.65,
+        roughness: 0.35,
+        emissive: 0xf97316,
+        emissiveIntensity: 0.65,
+      });
+      for (let dr = 0; dr < 14; dr++) {
+        const drMesh = new THREE.Mesh(drumGeo, drumMat);
+        const drAngle = Math.random() * Math.PI * 2;
+        const drDist = 20 + Math.random() * (perimeterRadius * 0.55);
+        const isTipped = dr % 3 === 0;
+        drMesh.position.set(Math.cos(drAngle) * drDist, isTipped ? 2.8 : 4.0, Math.sin(drAngle) * drDist);
+        if (isTipped) {
+          drMesh.rotation.z = Math.PI / 2;
+          drMesh.rotation.y = Math.random() * Math.PI;
+        }
+        debrisGroup.add(drMesh);
+      }
+
+      // Swirling flame pockets around the debris
+      const vortexTexture = createFluidFlameTongueTexture();
+      const vortexCount = 180;
+      const vortexSpeeds = new Float32Array(vortexCount);
+      const vortexAngles = new Float32Array(vortexCount);
+      const vortexRadii = new Float32Array(vortexCount);
+      const vortexPos = new Float32Array(vortexCount * 3);
+
+      for (let v = 0; v < vortexCount; v++) {
+        vortexSpeeds[v] = 1.6 + Math.random() * 3.2;
+        vortexAngles[v] = Math.random() * Math.PI * 2;
+        vortexRadii[v] = 6 + Math.random() * (perimeterRadius * 0.45);
+        const y = Math.random() * 180;
+        const prog = y / 180;
+        const r = vortexRadii[v] * (1.0 + prog * 1.5);
+        const a = vortexAngles[v] + prog * 10.0;
+        vortexPos[v * 3] = Math.cos(a) * r;
+        vortexPos[v * 3 + 1] = y + 2.5;
+        vortexPos[v * 3 + 2] = Math.sin(a) * r;
+      }
+
+      const vortexGeo = new THREE.BufferGeometry();
+      vortexGeo.setAttribute('position', new THREE.BufferAttribute(vortexPos, 3));
+      const vortexMat = new THREE.PointsMaterial({
+        map: vortexTexture,
+        size: 32,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const vortexPoints = new THREE.Points(vortexGeo, vortexMat);
+      debrisGroup.add(vortexPoints);
+      group.add(debrisGroup);
+
+      burningDebrisRef.current = {
+        debrisGroup,
+        vortexPoints,
+        vortexSpeeds,
+        vortexAngles,
+        vortexRadii,
+        vortexCount,
+      };
+    }
+
+    // 4. NASA FIRMS Fire Radiative Power (FRP) Concentric Isolines
     [perimeterRadius * 0.5, perimeterRadius, perimeterRadius * 1.5].forEach((r, idx) => {
       const ringMat = new THREE.MeshBasicMaterial({
         color: idx === 1 ? 0xf97316 : 0xef4444,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.4 - idx * 0.1,
+        opacity: 0.38 - idx * 0.1,
       });
       const ringMesh = new THREE.Mesh(new THREE.RingGeometry(r - 1.2, r + 0.8, 64), ringMat);
       ringMesh.rotation.x = -Math.PI / 2;
@@ -978,8 +1827,8 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       group.add(ringMesh);
     });
 
-    // 3. Satellite Observation Footprint Boundary (375m VIIRS Sensor Pixel)
-    const pixelSize = fire.satellite.includes('MODIS') ? 220 : 130;
+    // 5. Satellite Observation Footprint Boundary
+    const pixelSize = fire.satellite?.includes('MODIS') ? 220 : 130;
     const footprintGeo = new THREE.BoxGeometry(pixelSize, 1.2, pixelSize);
     const footprintEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(footprintGeo),
@@ -988,7 +1837,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     footprintEdges.position.y = 3;
     group.add(footprintEdges);
 
-    // 4. Photorealistic Volumetric Flame Billows (750 Procedural Glowing Sprite Particles)
+    // 6. Photorealistic Fluid Flame Billows (Scaled with FRP intensity)
     const flameTexture = createCircleGlowTexture([
       { offset: 0.0, color: 'rgba(255, 255, 255, 1.0)' },
       { offset: 0.18, color: 'rgba(255, 225, 90, 0.95)' },
@@ -997,7 +1846,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       { offset: 1.0, color: 'rgba(0, 0, 0, 0.0)' },
     ]);
 
-    const flameCount = 750;
+    const flameCount = Math.min(850, Math.max(320, Math.round(frpMW * 2.2)));
     const flamePositions = new Float32Array(flameCount * 3);
     const flameBaseX = new Float32Array(flameCount);
     const flameBaseZ = new Float32Array(flameCount);
@@ -1007,13 +1856,12 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
     for (let i = 0; i < flameCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = Math.pow(Math.random(), 0.6) * (perimeterRadius * 0.48);
+      const radius = Math.pow(Math.random(), 0.6) * (perimeterRadius * 0.5);
       flameBaseX[i] = Math.cos(angle) * radius;
       flameBaseZ[i] = Math.sin(angle) * radius;
       flameProgress[i] = Math.random();
       flameSpeeds[i] = 0.012 + Math.random() * 0.022;
-      flameMaxHeights[i] = 35 + Math.random() * 45;
-
+      flameMaxHeights[i] = 32 + (frpMW / 1000) * 45 + Math.random() * 25;
       const y = flameProgress[i] * flameMaxHeights[i];
       flamePositions[i * 3] = flameBaseX[i];
       flamePositions[i * 3 + 1] = y + 1.5;
@@ -1042,7 +1890,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       count: flameCount,
     };
 
-    // 5. Convective Thermal Vortex Sparks & Embers (950 Pinpoint Particles)
+    // 7. Convective Thermal Vortex Sparks & Embers
     const emberTexture = createCircleGlowTexture([
       { offset: 0.0, color: 'rgba(255, 255, 255, 1.0)' },
       { offset: 0.3, color: 'rgba(255, 195, 45, 0.95)' },
@@ -1050,7 +1898,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       { offset: 1.0, color: 'rgba(0, 0, 0, 0.0)' },
     ]);
 
-    const emberCount = 950;
+    const emberCount = Math.min(1000, Math.max(380, Math.round(frpMW * 2.6)));
     const emberPositions = new Float32Array(emberCount * 3);
     const emberSpeeds = new Float32Array(emberCount);
     const emberRadii = new Float32Array(emberCount);
@@ -1058,7 +1906,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
     for (let i = 0; i < emberCount; i++) {
       emberAngles[i] = Math.random() * Math.PI * 2;
-      emberRadii[i] = Math.random() * (perimeterRadius * 0.42);
+      emberRadii[i] = Math.random() * (perimeterRadius * 0.45);
       emberSpeeds[i] = 1.6 + Math.random() * 4.2;
       const y = Math.random() * 520;
       const prog = y / 520;
@@ -1089,28 +1937,28 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       count: emberCount,
     };
 
-    // 6. Atmospheric Dark Smoke Plume (450 Volumetric Billow Sprites)
+    // 8. Atmospheric Dark Smoke Plume
     const smokeTexture = createCircleGlowTexture([
-      { offset: 0.0, color: 'rgba(40, 48, 58, 0.45)' },
-      { offset: 0.4, color: 'rgba(28, 34, 42, 0.28)' },
-      { offset: 0.8, color: 'rgba(16, 20, 26, 0.09)' },
+      { offset: 0.0, color: 'rgba(30, 32, 38, 0.72)' },
+      { offset: 0.45, color: 'rgba(45, 48, 55, 0.42)' },
+      { offset: 0.85, color: 'rgba(60, 64, 75, 0.12)' },
       { offset: 1.0, color: 'rgba(0, 0, 0, 0.0)' },
     ]);
 
-    const smokeCount = 450;
+    const smokeCount = 380;
     const smokePositions = new Float32Array(smokeCount * 3);
     const smokeSpeeds = new Float32Array(smokeCount);
-    const smokeDriftAngles = new Float32Array(smokeCount);
     const smokeRadii = new Float32Array(smokeCount);
+    const smokeAngles = new Float32Array(smokeCount);
 
     for (let i = 0; i < smokeCount; i++) {
-      smokeDriftAngles[i] = Math.random() * Math.PI * 2;
-      smokeRadii[i] = 15 + Math.random() * 25;
-      smokeSpeeds[i] = 1.0 + Math.random() * 2.2;
+      smokeAngles[i] = Math.random() * Math.PI * 2;
+      smokeRadii[i] = 12 + Math.random() * (perimeterRadius * 0.4);
+      smokeSpeeds[i] = 1.0 + Math.random() * 2.8;
       const y = 30 + Math.random() * 550;
       const prog = (y - 30) / 550;
       const r = smokeRadii[i] + prog * 140;
-      const a = smokeDriftAngles[i] + prog * 1.5;
+      const a = smokeAngles[i] + prog * 1.5;
       smokePositions[i * 3] = Math.cos(a) * r + prog * 200;
       smokePositions[i * 3 + 1] = y;
       smokePositions[i * 3 + 2] = Math.sin(a) * r - prog * 150;
@@ -1120,10 +1968,8 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
     const smokeMat = new THREE.PointsMaterial({
       map: smokeTexture,
-      size: 75,
+      size: 90,
       transparent: true,
-      opacity: 0.32,
-      blending: THREE.NormalBlending,
       depthWrite: false,
     });
     const smokePoints = new THREE.Points(smokeGeo, smokeMat);
@@ -1132,34 +1978,36 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     wildfireSmokeRef.current = {
       points: smokePoints,
       speeds: smokeSpeeds,
-      driftAngles: smokeDriftAngles,
+      driftAngles: smokeAngles,
       initialRadii: smokeRadii,
       count: smokeCount,
     };
 
-    // 7. Active Glowing Firefront Perimeter Line
+    // 9. Active Glowing Firefront Perimeter Line
     const firelinePoints: THREE.Vector3[] = [];
-    const firelineSegments = 48;
-    for (let i = 0; i <= firelineSegments; i++) {
-      const a = (i / firelineSegments) * Math.PI * 2;
-      const r = (perimeterRadius * 0.44) + (Math.sin(a * 5) * 6 + Math.cos(a * 9) * 4);
+    const segments = 64;
+    for (let s = 0; s <= segments; s++) {
+      const a = (s / segments) * Math.PI * 2;
+      const r = perimeterRadius * (0.95 + Math.sin(a * 6.0) * 0.08);
       firelinePoints.push(new THREE.Vector3(Math.cos(a) * r, 2.5, Math.sin(a) * r));
     }
     const firelineGeo = new THREE.BufferGeometry().setFromPoints(firelinePoints);
     const firelineMat = new THREE.LineBasicMaterial({
-      color: 0xf97316,
-      linewidth: 2,
+      color: 0xef4444,
+      linewidth: 2.5,
+      transparent: true,
+      opacity: 0.85,
     });
     const fireline = new THREE.Line(firelineGeo, firelineMat);
     group.add(fireline);
 
-    // 8. Multi-Octave Turbulent Firelight
-    const fireLight1 = new THREE.PointLight(0xff6600, 9, 500);
-    fireLight1.position.set(10, 32, -5);
+    // 10. Multi-Octave Turbulent Firelight Illuminating Greenery & Ground
+    const fireLight1 = new THREE.PointLight(0xff6600, 8.5, 450);
+    fireLight1.position.set(0, 22, 0);
     group.add(fireLight1);
 
-    const fireLight2 = new THREE.PointLight(0xf97316, 6, 350);
-    fireLight2.position.set(30, 24, -20);
+    const fireLight2 = new THREE.PointLight(0xffaa00, 5.5, 320);
+    fireLight2.position.set(perimeterRadius * 0.35, 14, -perimeterRadius * 0.25);
     group.add(fireLight2);
 
     wildfireLightsRef.current = {
@@ -1168,7 +2016,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       firelineMesh: fireline,
     };
 
-    // 9. Wind Direction Ground Vector Arrow
+    // 11. Wind Direction Ground Vector Arrow
     const windVectorPoints = [new THREE.Vector3(0, 3, 0), new THREE.Vector3(130, 3, -100)];
     const windLine = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(windVectorPoints),
@@ -1182,18 +2030,19 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     cameraAngleRef.current.target.set(30, 45, -20);
     cameraAngleRef.current.radius = 360;
     updateCamera();
-  }, [updateCamera]);
+  }, [updateCamera, fireSceneType, interactiveFireIntensity]);
 
   /**
    * BUILD ACCURATE 3D EARTHQUAKE EPICENTER & TECTONIC FAULT RUPTURE MESH
-   * True USGS Seismological Telemetry:
-   * - Tectonic fault fracture with crustal slip displacement and glowing friction stress
-   * - Continuous harmonic P-Wave and S-Wave shockwave trains (zero popping/snapping)
-   * - Dynamic piezoelectric fault rupture sparks shooting along fissure
+   * Clean, Tasteful Seismological Physics on Normal Countryside Land:
+   * - Normal countryside topography with lush grass meadows, asphalt highway, trees, utility poles, houses & vehicles
+   * - Continuous smooth harmonic P-Wave and S-Wave shockwave ripples (zero popping/snapping)
+   * - Smooth Rayleigh and Love surface wave ground undulations scaled gracefully to Magnitude
    * - Subterranean hypocenter with 3D USGS focal mechanism beachball & curved ray paths
-   * - Suspended digital seismograph HUD with active traveling scan needle
+   * - Clean digital seismograph HUD with active traveling scan needle
+   * - Zero cartoon artifacts, no DBZ levitating rocks, no lightning arcs, no typhoon wind bursts
    */
-  const build3DEarthquakeMesh = useCallback((earthquake: EarthquakeData) => {
+  const build3DEarthquakeMesh = useCallback((earthquake: EarthquakeData, overrideMag?: number) => {
     if (!sceneRef.current) return;
 
     if (targetGroupRef.current) {
@@ -1218,83 +2067,366 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     earthquakeHypocenterRef.current = null;
     earthquakeEpicenterRef.current = null;
     seismogramTelemetryRef.current = null;
+    landObjectsRef.current = null;
+    normalLandWaveRef.current = null;
 
-    const mag = earthquake.magnitude || 6.0;
+    const mag = typeof overrideMag === 'number' ? overrideMag : (interactiveMagnitude ?? (earthquake.magnitude || 6.0));
 
-    // 1. Topographic Terrain Ground with Fractured Fault Rupture
-    const terrainGeo = new THREE.PlaneGeometry(2400, 2400, 64, 64);
+    // 1. Topographic Normal Countryside Land with Highway and Magnitude-Dependent Fault Scarp
+    const terrainGeo = new THREE.PlaneGeometry(2400, 2400, 80, 80);
     const pos = terrainGeo.attributes.position;
+    const basePosArr = new Float32Array(pos.count * 3);
+
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vy = pos.getY(i);
-      // Fault strike-slip line along vy = vx * 0.35
-      const faultDist = vy - vx * 0.35;
-      const isNorthPlate = faultDist > 0;
 
-      // Natural rolling topography
+      // Normal rolling countryside topography with gentle hills & valleys
       let elevation =
-        Math.sin(vx * 0.006) * 16 +
-        Math.cos(vy * 0.006) * 16;
+        Math.sin(vx * 0.005) * 22 +
+        Math.cos(vy * 0.005) * 22 +
+        Math.sin(vx * 0.012 + vy * 0.012) * 10;
 
-      // Crustal slip fault scarp offset
-      elevation += isNorthPlate ? 8 : -8;
-
-      // Close to the fault fracture line: rugged rift depression
-      const absDist = Math.abs(faultDist);
-      if (absDist < 40) {
-        elevation -= (1.0 - absDist / 40) * 12;
+      // Magnitude-based fault rupture scarp offset (clean geological displacement if M >= 5.5)
+      const faultDist = vy - (vx * 0.35 + 20);
+      if (mag >= 5.5) {
+        const scarpStep = Math.min(20, (mag - 5.0) * 5.0);
+        if (faultDist > 0) {
+          elevation += scarpStep * 0.55;
+        } else {
+          elevation -= scarpStep * 0.45;
+        }
+        // Fissure chasm depression along fault line
+        if (Math.abs(faultDist) < 32) {
+          elevation -= (1.0 - Math.abs(faultDist) / 32) * (scarpStep * 0.65 + 3);
+        }
       }
+
       pos.setZ(i, elevation);
+      basePosArr[i * 3] = vx;
+      basePosArr[i * 3 + 1] = vy;
+      basePosArr[i * 3 + 2] = elevation;
     }
     terrainGeo.computeVertexNormals();
 
-    // Fault Scarp & Ground Texture via Canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-
-    // Subdued rocky terrain base
-    ctx.fillStyle = '#0f141d';
-    ctx.fillRect(0, 0, 512, 512);
-
-    // Diagonal Tectonic Fault Crevasse
-    ctx.strokeStyle = '#92400e'; // Crustal shear amber
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(0, 160);
-    for (let x = 0; x <= 512; x += 16) {
-      const y = 160 + x * 0.35 + (Math.random() - 0.5) * 14;
-      ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    // Glowing Thermal Friction Stress inside fault fissure
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, 160);
-    for (let x = 0; x <= 512; x += 20) {
-      const y = 160 + x * 0.35 + (Math.random() - 0.5) * 7;
-      ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    const terrainTexture = new THREE.CanvasTexture(canvas);
+    const crackSeverity = mag < 4.5 ? 0 : mag < 6.0 ? 1 : mag < 7.2 ? 2 : 3;
+    const normalLandTexture = createNormalLandTexture(mag >= 4.5, crackSeverity);
     const terrainMat = new THREE.MeshStandardMaterial({
-      map: terrainTexture,
-      roughness: 0.85,
-      metalness: 0.15,
+      map: normalLandTexture,
+      roughness: 0.88,
+      metalness: 0.08,
     });
     const terrain = new THREE.Mesh(terrainGeo, terrainMat);
     terrain.rotation.x = -Math.PI / 2;
     terrain.receiveShadow = true;
     group.add(terrain);
 
-    // 2. Surface Epicenter Precision Target Reticle & Sky Laser Beacon
-    const reticleGeo = new THREE.RingGeometry(12, 15, 64);
+    normalLandWaveRef.current = {
+      mesh: terrain,
+      basePositions: basePosArr,
+      vertexCount: pos.count,
+      magnitude: mag,
+    };
+
+    // 1b. REAL-WORLD OBJECTS ON NORMAL LAND: Countryside Trees, Highway Utility Poles, Cottages & Vehicles
+    const normalTreesData: { group: THREE.Group; baseY: number; phase: number; freq: number }[] = [];
+    const normalPolesData: { group: THREE.Group; baseY: number; phase: number; sparkLine?: THREE.Line }[] = [];
+    const normalStructuresData: { group: THREE.Group; baseY: number; baseZ: number; freq: number; isBarn?: boolean }[] = [];
+    const normalCarsData: { group: THREE.Group; baseY: number; phase: number }[] = [];
+
+    // 24 Countryside Evergreen & Deciduous Trees
+    const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9 });
+    const greenFoliageMat1 = new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.85 });
+    const greenFoliageMat2 = new THREE.MeshStandardMaterial({ color: 0x1b4332, roughness: 0.85 });
+
+    for (let t = 0; t < 24; t++) {
+      const tGroup = new THREE.Group();
+      const tx = -350 + (t % 6) * 140 + (Math.random() - 0.5) * 45;
+      const tz = -320 + Math.floor(t / 6) * 160 + (Math.random() - 0.5) * 45;
+
+      const isPine = t % 2 === 0;
+      const trunkH = 14 + Math.random() * 8;
+      const trunkMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, trunkH, 7), treeTrunkMat);
+      trunkMesh.position.y = trunkH / 2;
+      tGroup.add(trunkMesh);
+
+      if (isPine) {
+        const coneMesh = new THREE.Mesh(new THREE.ConeGeometry(7, 18, 7), greenFoliageMat1);
+        coneMesh.position.y = trunkH + 8;
+        tGroup.add(coneMesh);
+      } else {
+        const sphereMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(8, 1), greenFoliageMat2);
+        sphereMesh.position.y = trunkH + 7;
+        tGroup.add(sphereMesh);
+      }
+
+      tGroup.position.set(tx, 2.0, tz);
+      group.add(tGroup);
+
+      normalTreesData.push({
+        group: tGroup,
+        baseY: 2.0,
+        phase: Math.random() * Math.PI * 2,
+        freq: 10.0 + Math.random() * 5.0,
+      });
+    }
+
+    // 8 Roadside Wooden Utility / Telephone Poles with Sagging Power Lines
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x523e2b, roughness: 0.95 });
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x18181b, linewidth: 1.5 });
+    const poleH = 26;
+    const polePositions: THREE.Vector3[] = [];
+
+    for (let p = 0; p < 8; p++) {
+      const pGroup = new THREE.Group();
+      const px = -280 + p * 80;
+      const pz = -30 + Math.sin(p * 0.5) * 15;
+
+      const poleCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.75, poleH, 8), poleMat);
+      poleCyl.position.y = poleH / 2;
+      pGroup.add(poleCyl);
+
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(8, 0.6, 0.6), poleMat);
+      arm.position.y = poleH - 1.5;
+      pGroup.add(arm);
+
+      if (p % 3 === 1) {
+        const trans = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 3.5, 8), new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.6 }));
+        trans.position.set(1.4, poleH - 5, 0);
+        pGroup.add(trans);
+      }
+
+      pGroup.position.set(px, 2.0, pz);
+      group.add(pGroup);
+
+      polePositions.push(new THREE.Vector3(px, poleH + 0.5, pz));
+      normalPolesData.push({
+        group: pGroup,
+        baseY: 2.0,
+        phase: p * 0.7,
+      });
+    }
+
+    // Sagging overhead power cables connecting poles
+    for (let w = 0; w < polePositions.length - 1; w++) {
+      const startP = polePositions[w];
+      const endP = polePositions[w + 1];
+      const wirePoints: THREE.Vector3[] = [];
+      const segs = 10;
+      for (let s = 0; s <= segs; s++) {
+        const t = s / segs;
+        const wx = startP.x + t * (endP.x - startP.x);
+        const wz = startP.z + t * (endP.z - startP.z);
+        const sag = Math.sin(t * Math.PI) * 2.8;
+        const wy = startP.y - sag;
+        wirePoints.push(new THREE.Vector3(wx, wy, wz));
+      }
+      const wireGeo = new THREE.BufferGeometry().setFromPoints(wirePoints);
+      const wireLine = new THREE.Line(wireGeo, wireMat);
+      group.add(wireLine);
+    }
+
+    // 1c. FARM COMPLEX & RURAL STRUCTURES: Red Timber Barn, Silo, Country Cottages & Fences
+    const barnWallMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.85 }); // Classic barn red
+    const barnRoofMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.65 });
+    const siloMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5, roughness: 0.35 });
+    const houseWallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.8 });
+    const houseRoofMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.7 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+
+    // --- Red Farm Barn with Silo & Gambrel Roof ---
+    const barnGroup = new THREE.Group();
+    // Barn Main Hall
+    const barnWalls = new THREE.Mesh(new THREE.BoxGeometry(38, 22, 28), barnWallMat);
+    barnWalls.position.y = 11;
+    barnGroup.add(barnWalls);
+
+    // Barn White Cross-Brace Trim
+    const doorTrim1 = new THREE.Mesh(new THREE.BoxGeometry(10, 14, 0.6), trimMat);
+    doorTrim1.position.set(0, 7, 14.2);
+    barnGroup.add(doorTrim1);
+
+    // Barn Gambrel Roof
+    const barnRoof = new THREE.Mesh(new THREE.ConeGeometry(25, 12, 4), barnRoofMat);
+    barnRoof.position.y = 28;
+    barnRoof.rotation.y = Math.PI / 4;
+    barnGroup.add(barnRoof);
+
+    // Farm Grain Silo
+    const siloCyl = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 32, 16), siloMat);
+    siloCyl.position.set(26, 16, 0);
+    barnGroup.add(siloCyl);
+    const siloDome = new THREE.Mesh(new THREE.SphereGeometry(6, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), siloMat);
+    siloDome.position.set(26, 32, 0);
+    barnGroup.add(siloDome);
+
+    barnGroup.position.set(-150, 2.0, -85);
+    barnGroup.rotation.y = 0.15;
+    group.add(barnGroup);
+
+    normalStructuresData.push({
+      group: barnGroup,
+      baseY: 2.0,
+      baseZ: -85,
+      freq: 15.0,
+      isBarn: true,
+    });
+
+    // --- 3 Rural Country Farmhouses / Cottages ---
+    const houseCoords = [
+      { x: 140, z: -75, ry: -0.3, freq: 18.0 },
+      { x: 60, z: 100, ry: 0.35, freq: 21.0 },
+      { x: -95, z: 115, ry: -0.2, freq: 19.0 },
+    ];
+
+    houseCoords.forEach((hc) => {
+      const hGroup = new THREE.Group();
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(22, 12, 16), houseWallMat);
+      walls.position.y = 6;
+      hGroup.add(walls);
+
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(17, 8, 4), houseRoofMat);
+      roof.position.y = 16;
+      roof.rotation.y = Math.PI / 4;
+      hGroup.add(roof);
+
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 2), new THREE.MeshStandardMaterial({ color: 0x78716c }));
+      chim.position.set(5, 17, 2);
+      hGroup.add(chim);
+
+      hGroup.position.set(hc.x, 2.0, hc.z);
+      hGroup.rotation.y = hc.ry;
+      group.add(hGroup);
+
+      normalStructuresData.push({
+        group: hGroup,
+        baseY: 2.0,
+        baseZ: hc.z,
+        freq: hc.freq,
+      });
+    });
+
+    // --- Farm Wooden Post-and-Rail Fences ---
+    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x78533b, roughness: 0.95 });
+    for (let f = 0; f < 8; f++) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 6), fenceMat);
+      post.position.set(-180 + f * 12, 3.0, -110);
+      group.add(post);
+
+      if (f < 7) {
+        const rail1 = new THREE.Mesh(new THREE.BoxGeometry(12, 0.4, 0.4), fenceMat);
+        rail1.position.set(-174 + f * 12, 4.5, -110);
+        group.add(rail1);
+        const rail2 = new THREE.Mesh(new THREE.BoxGeometry(12, 0.4, 0.4), fenceMat);
+        rail2.position.set(-174 + f * 12, 2.8, -110);
+        group.add(rail2);
+      }
+    }
+
+    // 1d. 3D PAVED HIGHWAY ROAD WITH DYNAMIC TECTONIC FAULT SCARP & ASPHALT BUCKLING (M >= 6.8)
+    const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.88 });
+    const roadShoulderMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.95 });
+    const whiteStripeMat = new THREE.MeshBasicMaterial({ color: 0xf1f5f9 });
+    const yellowStripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+
+    // West Road Plate (from X = -480 to -15)
+    const roadPlateWest = new THREE.Group();
+    const westRoadMesh = new THREE.Mesh(new THREE.BoxGeometry(450, 1.2, 42), asphaltMat);
+    westRoadMesh.position.set(-240, 2.4, 0);
+    roadPlateWest.add(westRoadMesh);
+    const westShoulder = new THREE.Mesh(new THREE.BoxGeometry(450, 0.8, 50), roadShoulderMat);
+    westShoulder.position.set(-240, 2.0, 0);
+    roadPlateWest.add(westShoulder);
+    // Yellow centerline
+    const westYellow = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 1.4), yellowStripeMat);
+    westYellow.position.set(-240, 3.05, 0);
+    roadPlateWest.add(westYellow);
+    // White border lanes
+    const westWhite1 = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 0.8), whiteStripeMat);
+    westWhite1.position.set(-240, 3.05, 18);
+    roadPlateWest.add(westWhite1);
+    const westWhite2 = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 0.8), whiteStripeMat);
+    westWhite2.position.set(-240, 3.05, -18);
+    roadPlateWest.add(westWhite2);
+    group.add(roadPlateWest);
+
+    // East Road Plate (from X = 15 to 480)
+    const roadPlateEast = new THREE.Group();
+    const eastRoadMesh = new THREE.Mesh(new THREE.BoxGeometry(450, 1.2, 42), asphaltMat);
+    eastRoadMesh.position.set(240, 2.4, 0);
+    roadPlateEast.add(eastRoadMesh);
+    const eastShoulder = new THREE.Mesh(new THREE.BoxGeometry(450, 0.8, 50), roadShoulderMat);
+    eastShoulder.position.set(240, 2.0, 0);
+    roadPlateEast.add(eastShoulder);
+    // Yellow centerline
+    const eastYellow = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 1.4), yellowStripeMat);
+    eastYellow.position.set(240, 3.05, 0);
+    roadPlateEast.add(eastYellow);
+    // White border lanes
+    const eastWhite1 = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 0.8), whiteStripeMat);
+    eastWhite1.position.set(240, 3.05, 18);
+    roadPlateEast.add(eastWhite1);
+    const eastWhite2 = new THREE.Mesh(new THREE.BoxGeometry(450, 0.2, 0.8), whiteStripeMat);
+    eastWhite2.position.set(240, 3.05, -18);
+    roadPlateEast.add(eastWhite2);
+    group.add(roadPlateEast);
+
+    // Buckled Asphalt Slabs along Fault Rupture Crossing (-15 <= X <= 15)
+    const buckledSlabsData: { mesh: THREE.Mesh; baseY: number; baseRotZ: number; baseRotX: number }[] = [];
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.92 });
+    for (let s = 0; s < 6; s++) {
+      const sx = -12 + s * 5;
+      const sz = -16 + (s % 3) * 16;
+      const slabGeo = new THREE.BoxGeometry(6.5, 1.4, 12);
+      const slabMesh = new THREE.Mesh(slabGeo, slabMat);
+      slabMesh.position.set(sx, 2.45, sz);
+      slabMesh.rotation.z = (Math.random() - 0.5) * 0.05;
+      slabMesh.rotation.x = (Math.random() - 0.5) * 0.05;
+      group.add(slabMesh);
+
+      buckledSlabsData.push({
+        mesh: slabMesh,
+        baseY: 2.45,
+        baseRotZ: slabMesh.rotation.z,
+        baseRotX: slabMesh.rotation.x,
+      });
+    }
+
+    // 2 Vehicles on Country Road
+    const carMat1 = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8, roughness: 0.2 });
+    const carMat2 = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.7, roughness: 0.3 });
+
+    const car1 = new THREE.Group();
+    car1.add(new THREE.Mesh(new THREE.BoxGeometry(10, 4, 5), carMat1));
+    car1.position.set(-60, 3.5, 0);
+    roadPlateWest.add(car1);
+
+    const car2 = new THREE.Group();
+    car2.add(new THREE.Mesh(new THREE.BoxGeometry(12, 5, 5.5), carMat2));
+    car2.position.set(90, 3.5, 10);
+    roadPlateEast.add(car2);
+
+    normalCarsData.push(
+      { group: car1, baseY: 3.5, phase: 0 },
+      { group: car2, baseY: 3.5, phase: 1.5 }
+    );
+
+    landObjectsRef.current = {
+      trees: normalTreesData,
+      poles: normalPolesData,
+      structures: normalStructuresData,
+      cars: normalCarsData,
+      roadSegments: {
+        roadPlateWest,
+        roadPlateEast,
+        buckledSlabs: buckledSlabsData,
+      },
+    };
+
+    // 2. Surface Epicenter USGS Target Ring & Crosshairs
+    const reticleGeo = new THREE.RingGeometry(12, 16, 48);
     const reticleMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
+      color: 0xdc2626,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.85,
@@ -1304,12 +2436,25 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     reticleMesh.position.y = 2.8;
     group.add(reticleMesh);
 
-    // Rotating Crosshairs
+    // Inner bullseye dot
+    const bullseyeGeo = new THREE.CircleGeometry(4, 32);
+    const bullseyeMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const bullseyeMesh = new THREE.Mesh(bullseyeGeo, bullseyeMat);
+    bullseyeMesh.rotation.x = -Math.PI / 2;
+    bullseyeMesh.position.y = 2.82;
+    group.add(bullseyeMesh);
+
+    // Clean ground crosshair lines
     const crossPoints = [
-      new THREE.Vector3(-32, 3.0, 0),
-      new THREE.Vector3(32, 3.0, 0),
-      new THREE.Vector3(0, 3.0, -32),
-      new THREE.Vector3(0, 3.0, 32),
+      new THREE.Vector3(-28, 2.85, 0),
+      new THREE.Vector3(28, 2.85, 0),
+      new THREE.Vector3(0, 2.85, -28),
+      new THREE.Vector3(0, 2.85, 28),
     ];
     const crossLine = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(crossPoints),
@@ -1317,27 +2462,15 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     );
     group.add(crossLine);
 
-    // Vertical Epicenter Sky Beacon Column
-    const beaconGeo = new THREE.CylinderGeometry(1.2, 1.2, 450, 16);
-    beaconGeo.translate(0, 225, 0);
-    const beaconMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
-      transparent: true,
-      opacity: 0.45,
-      blending: THREE.AdditiveBlending,
-    });
-    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-    group.add(beacon);
-
     earthquakeEpicenterRef.current = {
       reticle: reticleMesh,
       crosshair: crossLine,
-      beacon,
+      beacon: reticleMesh,
     };
 
-    // 3. Continuous Harmonic Wavefronts (P-Wave Compression & S-Wave Shear Trains)
-    const baseWaveRadius = Math.max(25, Math.min(65, Math.pow(1.6, mag) * 0.35));
-    const maxWaveRadius = Math.max(180, Math.min(480, baseWaveRadius * 6.5));
+    // 3. Smooth, Clean Concentric Seismic Shockwaves (3 lightweight rings, zero lag)
+    const baseWaveRadius = 25;
+    const maxWaveRadius = Math.max(160, Math.min(380, 50 * Math.sqrt(mag)));
     const wavefrontsList: {
       mesh: THREE.Mesh;
       type: 'P' | 'S';
@@ -1348,12 +2481,11 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       peakOpacity: number;
     }[] = [];
 
-    // 4 P-Wave compression shockwave rings (Fast, cyan/electric blue, sharp)
-    const pPhases = [0.0, 0.25, 0.5, 0.75];
-    pPhases.forEach((phase) => {
-      const ringGeo = new THREE.RingGeometry(1, 2.5, 64);
+    const phases = [0.0, 0.33, 0.66];
+    phases.forEach((phase, idx) => {
+      const ringGeo = new THREE.RingGeometry(1, 2.5, 48);
       const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
+        color: idx === 0 ? 0xef4444 : idx === 1 ? 0xf59e0b : 0x38bdf8,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.0,
@@ -1361,227 +2493,63 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = -Math.PI / 2;
-      ringMesh.position.y = 3.2;
+      ringMesh.position.y = 3.0;
       group.add(ringMesh);
 
       wavefrontsList.push({
         mesh: ringMesh,
-        type: 'P',
+        type: idx === 0 ? 'S' : 'P',
         phase,
-        speed: 0.35, // Cycles per second
-        baseRadius: baseWaveRadius * 0.4,
+        speed: 0.22,
+        baseRadius: baseWaveRadius,
         maxRadius: maxWaveRadius,
-        peakOpacity: 0.85,
-      });
-    });
-
-    // 4 S-Wave destructive shear rings (Slower, intense amber-red, high energy)
-    const sPhases = [0.12, 0.37, 0.62, 0.87];
-    sPhases.forEach((phase) => {
-      const ringGeo = new THREE.RingGeometry(1, 3.8, 64);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0xef4444,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.0,
-        blending: THREE.AdditiveBlending,
-      });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = -Math.PI / 2;
-      ringMesh.position.y = 3.5;
-      group.add(ringMesh);
-
-      wavefrontsList.push({
-        mesh: ringMesh,
-        type: 'S',
-        phase,
-        speed: 0.22, // S-wave is ~60% speed of P-wave
-        baseRadius: baseWaveRadius * 0.3,
-        maxRadius: maxWaveRadius * 0.85,
-        peakOpacity: 0.95,
+        peakOpacity: 0.75,
       });
     });
 
     earthquakeWavefrontsRef.current = wavefrontsList;
 
-    // 4. Dynamic Piezoelectric Fault Rupture Sparks
-    const sparkTexture = createCircleGlowTexture([
-      { offset: 0.0, color: 'rgba(255, 255, 255, 1.0)' },
-      { offset: 0.4, color: 'rgba(56, 189, 248, 0.9)' },
-      { offset: 0.8, color: 'rgba(239, 68, 68, 0.4)' },
-      { offset: 1.0, color: 'rgba(0, 0, 0, 0.0)' },
-    ]);
-
-    const sparkCount = 280;
-    const sparkPositions = new Float32Array(sparkCount * 3);
-    const sparkProgress = new Float32Array(sparkCount);
-    const sparkSpeeds = new Float32Array(sparkCount);
-
-    for (let i = 0; i < sparkCount; i++) {
-      sparkProgress[i] = Math.random();
-      sparkSpeeds[i] = 0.006 + Math.random() * 0.015;
-      const x = (sparkProgress[i] - 0.5) * 600;
-      const z = x * 0.35 + (Math.random() - 0.5) * 8;
-      sparkPositions[i * 3] = x;
-      sparkPositions[i * 3 + 1] = 2.8 + Math.random() * 12;
-      sparkPositions[i * 3 + 2] = z;
-    }
-
-    const sparkGeo = new THREE.BufferGeometry();
-    sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
-    const sparkMat = new THREE.PointsMaterial({
-      map: sparkTexture,
-      size: 7.0,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const sparkPoints = new THREE.Points(sparkGeo, sparkMat);
-    group.add(sparkPoints);
-
-    earthquakeFaultSparksRef.current = {
-      points: sparkPoints,
-      progress: sparkProgress,
-      speeds: sparkSpeeds,
-      count: sparkCount,
-    };
-
-    // 5. Subterranean Hypocenter & USGS 3D Focal Mechanism Beachball
-    const focalDepthY = -Math.max(40, Math.min(180, (earthquake.depth || 15) * 3.8));
-
-    const hypoGroup = new THREE.Group();
-    hypoGroup.position.set(0, focalDepthY, 0);
-
-    // 3D Focal Mechanism Beachball (Sphere with quadrant materials)
-    const beachballGeo = new THREE.SphereGeometry(14, 24, 24);
-    const beachballMat = new THREE.MeshStandardMaterial({
-      color: 0xef4444,
-      emissive: 0xdc2626,
-      emissiveIntensity: 1.8,
-      roughness: 0.25,
-      metalness: 0.7,
-    });
-    const beachballMesh = new THREE.Mesh(beachballGeo, beachballMat);
-    hypoGroup.add(beachballMesh);
-
-    // Tectonic Stress Strain Cage
-    const stressCage = new THREE.LineSegments(
-      new THREE.WireframeGeometry(new THREE.OctahedronGeometry(18, 1)),
-      new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8 })
-    );
-    hypoGroup.add(stressCage);
-
-    // Subterranean focal illumination light
-    const hypoLight = new THREE.PointLight(0xef4444, 10, 450);
-    hypoGroup.add(hypoLight);
-    group.add(hypoGroup);
-
-    // Curved 3D Seismic Ray Propagation Paths (Focal origin to surface)
-    const rayLines: THREE.Line[] = [];
-    const rayCount = 10;
-    for (let r = 0; r < rayCount; r++) {
-      const a = (r / rayCount) * Math.PI * 2;
-      const surfaceDist = 50 + (r % 3) * 60;
-      const surfaceX = Math.cos(a) * surfaceDist;
-      const surfaceZ = Math.sin(a) * surfaceDist;
-
-      // Quadratic bezier curve from hypocenter to surface
-      const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(0, focalDepthY, 0),
-        new THREE.Vector3(surfaceX * 0.4, focalDepthY * 0.45, surfaceZ * 0.4),
-        new THREE.Vector3(surfaceX, 2.5, surfaceZ)
-      );
-
-      const rPoints = curve.getPoints(24);
-      const rGeo = new THREE.BufferGeometry().setFromPoints(rPoints);
-      const rLine = new THREE.Line(
-        rGeo,
-        new THREE.LineDashedMaterial({
-          color: r % 2 === 0 ? 0x38bdf8 : 0xf59e0b,
-          dashSize: 10,
-          gapSize: 6,
+    // 4. Subtle Geological Fault Rupture Crevasses on Ground Surface (M >= 5.0)
+    if (mag >= 5.0) {
+      const crackLinesGroup = new THREE.Group();
+      for (let c = 0; c < 4; c++) {
+        const baseAngle = (c / 4) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+        const crackPoints: THREE.Vector3[] = [];
+        let cx = 0;
+        let cz = 0;
+        crackPoints.push(new THREE.Vector3(cx, 2.85, cz));
+        const segments = 8;
+        const maxLen = 60 + Math.random() * 80;
+        for (let s = 1; s <= segments; s++) {
+          const segDist = (s / segments) * maxLen;
+          const jitterA = baseAngle + (Math.random() - 0.5) * 0.35;
+          cx = Math.cos(jitterA) * segDist;
+          cz = Math.sin(jitterA) * segDist;
+          crackPoints.push(new THREE.Vector3(cx, 2.85, cz));
+        }
+        const crackGeo = new THREE.BufferGeometry().setFromPoints(crackPoints);
+        const crackMat = new THREE.LineBasicMaterial({
+          color: c % 2 === 0 ? 0xdc2626 : 0xd97706,
+          linewidth: 1.5,
           transparent: true,
-          opacity: 0.65,
-        })
-      );
-      rLine.computeLineDistances();
-      group.add(rLine);
-      rayLines.push(rLine);
+          opacity: 0.75,
+        });
+        const crackLine = new THREE.Line(crackGeo, crackMat);
+        crackLinesGroup.add(crackLine);
+      }
+      group.add(crackLinesGroup);
     }
-
-    earthquakeHypocenterRef.current = {
-      beachballMesh,
-      stressGroup: hypoGroup,
-      rayLines,
-    };
-
-    // Vertical Focal Depth Ray
-    const depthShaft = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, focalDepthY, 0), new THREE.Vector3(0, 2.5, 0)]),
-      new THREE.LineDashedMaterial({ color: 0xef4444, dashSize: 8, gapSize: 4, linewidth: 2 })
-    );
-    depthShaft.computeLineDistances();
-    group.add(depthShaft);
-
-    // 6. Suspended 3D Digital Seismometer HUD with Active Sweeping Scan Needle
-    const waveStartX = -190;
-    const waveEndX = 190;
-    const waveY = 65; // Suspended in air above epicenter
-    const waveZ = 95;
-    const waveAmplitude = Math.min(48, Math.max(12, Math.pow(1.65, mag) * 0.8));
-
-    const wavePoints: THREE.Vector3[] = [];
-    for (let x = waveStartX; x <= waveEndX; x += 1.5) {
-      wavePoints.push(new THREE.Vector3(x, waveY, waveZ));
-    }
-
-    const waveGeo = new THREE.BufferGeometry().setFromPoints(wavePoints);
-    const waveMat = new THREE.LineBasicMaterial({
-      color: 0x10b981, // Electric seismic green
-      linewidth: 2,
-    });
-    const waveLine = new THREE.Line(waveGeo, waveMat);
-    group.add(waveLine);
-
-    // Seismometer Baseline Grid
-    const baseLine = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(waveStartX, waveY, waveZ),
-        new THREE.Vector3(waveEndX, waveY, waveZ),
-      ]),
-      new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.6 })
-    );
-    group.add(baseLine);
-
-    // Active Traveling Scan Needle
-    const scanMarkerGeo = new THREE.CylinderGeometry(0.8, 0.8, waveAmplitude * 2.2, 12);
-    const scanMarkerMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-    });
-    const scanMarker = new THREE.Mesh(scanMarkerGeo, scanMarkerMat);
-    scanMarker.position.set(waveStartX, waveY, waveZ);
-    group.add(scanMarker);
-
-    seismogramTelemetryRef.current = {
-      line: waveLine,
-      scanMarker,
-      startX: waveStartX,
-      endX: waveEndX,
-      baseY: waveY,
-      baseZ: waveZ,
-      mag,
-    };
 
     sceneRef.current.add(group);
 
-    // Camera Framing: Position camera looking at Epicenter and Waveform
-    cameraAngleRef.current.target.set(0, 25, 20);
-    cameraAngleRef.current.radius = 380;
-    updateCamera();
-  }, [updateCamera]);
+    // Camera Framing: Position camera looking at Epicenter and Waveform on initial load
+    if (!hasFramedInitialCameraRef.current) {
+      cameraAngleRef.current.target.set(0, 25, 20);
+      cameraAngleRef.current.radius = 380;
+      updateCamera();
+      hasFramedInitialCameraRef.current = true;
+    }
+  }, [updateCamera, interactiveMagnitude]);
 
   // Initialize WebGL Scene, Camera, Renderer, and Render Loop ONCE
   useEffect(() => {
@@ -1592,8 +2560,6 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
     // Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020408);
-    scene.fog = new THREE.FogExp2(0x03060c, 0.0009);
     sceneRef.current = scene;
 
     // Camera
@@ -1611,23 +2577,54 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
     // Illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+    ambientLightRef.current = ambientLight;
     scene.add(ambientLight);
 
     const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
     sunLight.position.set(400, 800, 500);
+    sunLightRef.current = sunLight;
     scene.add(sunLight);
 
     const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.8);
     rimLight.position.set(-400, 300, -500);
     scene.add(rimLight);
 
+    // Setup initial natural atmosphere based on mode
+    if (intelMode === 'earthquakes') {
+      // Natural daylight countryside sky & atmosphere (no dark void!)
+      scene.background = new THREE.Color(0x89b0d6);
+      scene.fog = new THREE.FogExp2(0xb0cae4, 0.0006);
+      ambientLight.color.setHex(0xdce7f0);
+      ambientLight.intensity = 1.6;
+      sunLight.color.setHex(0xfffbeb);
+      sunLight.intensity = 2.4;
+      sunLight.position.set(300, 600, 400);
+    } else if (intelMode === 'fires') {
+      // Natural forest dusk / clearing atmosphere with warm fire glow (no dark void!)
+      scene.background = new THREE.Color(0x2f4236);
+      scene.fog = new THREE.FogExp2(0x3a4f42, 0.0007);
+      ambientLight.color.setHex(0x506555);
+      ambientLight.intensity = 1.5;
+      sunLight.color.setHex(0xffe8cc);
+      sunLight.intensity = 2.0;
+      sunLight.position.set(250, 450, 350);
+    } else {
+      scene.background = new THREE.Color(0x020617);
+      scene.fog = new THREE.FogExp2(0x030a1c, 0.0009);
+      ambientLight.color.setHex(0xffffff);
+      ambientLight.intensity = 1.4;
+      sunLight.color.setHex(0xffffff);
+      sunLight.intensity = 2.0;
+      sunLight.position.set(400, 800, 500);
+    }
+
     // Initial build based on active mode
     if (intelMode === 'flights') {
       build3DAircraftMesh(currentFlight);
     } else if (intelMode === 'fires') {
-      build3DWildfireMesh(currentFire);
+      build3DWildfireMesh(currentFire, fireSceneType, interactiveFireIntensity ?? undefined);
     } else {
-      build3DEarthquakeMesh(currentEarthquake);
+      build3DEarthquakeMesh(currentEarthquake, interactiveMagnitude ?? undefined);
     }
 
     // 60 FPS Animation Loop
@@ -1636,9 +2633,8 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       animationFrameRef.current = requestAnimationFrame(animate);
       const elapsed = clock.getElapsedTime();
 
-      // 1. AIRCRAFT: Aerodynamic cruise dynamics, supersonic engine mach shockwaves, laminar contrails
+      // 1. AIRCRAFT
       if (airplaneGroupRef.current) {
-        // Subtle banking roll, pitch trim, and buoyant heave
         const roll = Math.sin(elapsed * 0.9) * 0.032;
         const pitch = Math.cos(elapsed * 0.6) * 0.014;
         const heave = Math.sin(elapsed * 1.3) * 2.4;
@@ -1646,13 +2642,11 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
         airplaneGroupRef.current.rotation.x = pitch;
         airplaneGroupRef.current.position.y = baseAircraftYRef.current + heave;
 
-        // Pulsing supersonic mach shock diamonds inside engine exhausts
         engineGlowMeshesRef.current.forEach((disc, idx) => {
           const p = 1.0 + Math.sin(elapsed * 22.0 + idx * 1.4) * 0.16;
           disc.scale.set(p, p, p);
         });
 
-        // Dynamic streaming laminar condensation wake (zero cotton - high speed particles)
         if (contrailParticlesRef.current) {
           const { points, offsets, count } = contrailParticlesRef.current;
           const posAttr = points.geometry.attributes.position as THREE.BufferAttribute;
@@ -1670,33 +2664,27 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
           posAttr.needsUpdate = true;
         }
 
-        // Radar altimeter scan beam
         if (dropLineRef.current) {
           (dropLineRef.current.material as any).dashOffset = -elapsed * 18.0;
         }
       }
 
-      // Flashing aircraft navigation strobes
-      if (strobeLightsRef.current) {
-        const isStrobeOn = Math.sin(elapsed * 6.0) > 0.6; // Quick flash
-        strobeLightsRef.current.tailStrobe.intensity = isStrobeOn ? 8.0 : 0.2;
-      }
-
-      // 2. WILDFIRE: Volumetric dynamic fluid flames, thermal ember vortex, expanding atmospheric smoke & combustion flicker
+      // 2. WILDFIRE: Clean, fluid flame billows, convective thermal embers, atmospheric smoke & firelight
       if (wildfireFlamesRef.current) {
         const { points, baseX, baseZ, progress, speeds, maxHeights, count } = wildfireFlamesRef.current;
         const posAttr = points.geometry.attributes.position as THREE.BufferAttribute;
         const arr = posAttr.array as Float32Array;
+        const isSurge = fireSurgeTriggerRef.current > 0;
+        const surgeFactor = isSurge ? 1.4 : 1.0;
 
         for (let i = 0; i < count; i++) {
-          progress[i] = (progress[i] + speeds[i]) % 1.0;
+          progress[i] = (progress[i] + speeds[i] * surgeFactor) % 1.0;
           const p = progress[i];
-          const y = p * maxHeights[i];
+          const y = p * maxHeights[i] * surgeFactor;
 
-          // High frequency combustion tongue turbulence + eastward wind sheer
           const windDrift = p * 42.0;
-          const flickerX = Math.sin(elapsed * 18.0 + i * 0.4) * (p * 10.0);
-          const flickerZ = Math.cos(elapsed * 15.0 + i * 0.4) * (p * 7.0);
+          const flickerX = Math.sin(elapsed * 16.0 + i * 0.4) * (p * 9.0);
+          const flickerZ = Math.cos(elapsed * 14.0 + i * 0.4) * (p * 6.5);
 
           arr[i * 3] = baseX[i] + flickerX + windDrift;
           arr[i * 3 + 1] = y + 1.5;
@@ -1710,13 +2698,15 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
         const { points, speeds, initialRadii, angles, count } = wildfireEmbersRef.current;
         const posAttr = points.geometry.attributes.position as THREE.BufferAttribute;
         const arr = posAttr.array as Float32Array;
+        const isSurge = fireSurgeTriggerRef.current > 0;
+        const speedBoost = isSurge ? 1.6 : 1.0;
 
         for (let i = 0; i < count; i++) {
-          arr[i * 3 + 1] += speeds[i];
+          arr[i * 3 + 1] += speeds[i] * speedBoost;
           const y = arr[i * 3 + 1];
           const prog = Math.min(1.0, y / 520);
           const currentRadius = initialRadii[i] + prog * 55;
-          const currentAngle = angles[i] + prog * 4.0 + elapsed * 0.4;
+          const currentAngle = angles[i] + prog * 4.0 + elapsed * 0.35;
 
           arr[i * 3] = Math.cos(currentAngle) * currentRadius + prog * 170;
           arr[i * 3 + 2] = Math.sin(currentAngle) * currentRadius - prog * 120;
@@ -1756,8 +2746,11 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       // Multi-octave firelight flicker on terrain & fireline pulse
       if (wildfireLightsRef.current) {
         const { light1, light2, firelineMesh } = wildfireLightsRef.current;
-        const flicker1 = 8.0 + Math.sin(elapsed * 25.0) * 2.4 + Math.cos(elapsed * 16.0) * 1.8 + Math.sin(elapsed * 41.0) * 1.0;
-        const flicker2 = 5.5 + Math.cos(elapsed * 21.0) * 1.6 + Math.sin(elapsed * 33.0) * 1.2;
+        const isSurge = fireSurgeTriggerRef.current > 0;
+        const surgeAdd = isSurge ? 6.0 : 0;
+        const flicker1 = 8.5 + surgeAdd + Math.sin(elapsed * 24.0) * 2.2 + Math.cos(elapsed * 15.0) * 1.6;
+        const flicker2 = 5.5 + surgeAdd * 0.7 + Math.cos(elapsed * 20.0) * 1.5 + Math.sin(elapsed * 31.0) * 1.1;
+
         light1.intensity = flicker1;
         light2.intensity = flicker2;
 
@@ -1765,106 +2758,337 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
           const mat = firelineMesh.material as THREE.LineBasicMaterial;
           mat.color.setHex(Math.sin(elapsed * 4.0) > 0 ? 0xf97316 : 0xef4444);
         }
+
+        if (fireSurgeTriggerRef.current > 0) {
+          fireSurgeTriggerRef.current = Math.max(0, fireSurgeTriggerRef.current - 0.015);
+        }
       }
 
-      // 3. EARTHQUAKE: Continuous harmonic P/S wave expansion (zero popping), piezoelectric fault sparks, rotating focal mechanism, live sweeping seismometer
-      if (earthquakeWavefrontsRef.current.length > 0) {
+      // Burning Trees Animation: subtle convective sway and glowing foliage ember pulse
+      if (burningTreesRef.current) {
+        const { trees } = burningTreesRef.current;
+        trees.forEach((t, idx) => {
+          t.group.rotation.z = Math.sin(elapsed * 3.5 + idx) * 0.028;
+          t.group.rotation.x = Math.cos(elapsed * 3.0 + idx) * 0.02;
+
+          const emberPulse = 0.7 + Math.sin(elapsed * 14.0 + idx * 2.0) * 0.3;
+          t.foliageMeshes.forEach((fMesh) => {
+            const m = fMesh.material as THREE.MeshStandardMaterial;
+            m.emissiveIntensity = emberPulse;
+          });
+        });
+      }
+
+      // Burning Tires Animation: dense smoke columns and dripping tar
+      if (burningTiresRef.current) {
+        const {
+          denseSmokePoints,
+          denseSmokeProgress,
+          denseSmokeSpeeds,
+          denseSmokeAngles,
+          denseSmokeRadii,
+          denseSmokeCount,
+          drippingTarPoints,
+          drippingTarPosY,
+          drippingTarSpeeds,
+          drippingTarBaseX,
+          drippingTarBaseZ,
+          tarCount,
+        } = burningTiresRef.current;
+
+        const sPosAttr = denseSmokePoints.geometry.attributes.position as THREE.BufferAttribute;
+        const sArr = sPosAttr.array as Float32Array;
+        for (let i = 0; i < denseSmokeCount; i++) {
+          denseSmokeProgress[i] = (denseSmokeProgress[i] + denseSmokeSpeeds[i]) % 1.0;
+          const p = denseSmokeProgress[i];
+          const r = denseSmokeRadii[i] + p * 90;
+          sArr[i * 3] = Math.cos(denseSmokeAngles[i]) * r + p * 80;
+          sArr[i * 3 + 1] = 6.0 + p * 400;
+          sArr[i * 3 + 2] = Math.sin(denseSmokeAngles[i]) * r - p * 50;
+        }
+        sPosAttr.needsUpdate = true;
+
+        const tarPosAttr = drippingTarPoints.geometry.attributes.position as THREE.BufferAttribute;
+        const tarArr = tarPosAttr.array as Float32Array;
+        for (let i = 0; i < tarCount; i++) {
+          drippingTarPosY[i] -= drippingTarSpeeds[i];
+          if (drippingTarPosY[i] <= 0) {
+            drippingTarPosY[i] = 1.0;
+          }
+          tarArr[i * 3] = drippingTarBaseX[i];
+          tarArr[i * 3 + 1] = 2.0 + drippingTarPosY[i] * 10;
+          tarArr[i * 3 + 2] = drippingTarBaseZ[i];
+        }
+        tarPosAttr.needsUpdate = true;
+      }
+
+      // Burning Debris Animation: flame pockets swirling around crates and pallets
+      if (burningDebrisRef.current) {
+        const { vortexPoints, vortexSpeeds, vortexAngles, vortexRadii, vortexCount } = burningDebrisRef.current;
+        const vPosAttr = vortexPoints.geometry.attributes.position as THREE.BufferAttribute;
+        const vArr = vPosAttr.array as Float32Array;
+        for (let v = 0; v < vortexCount; v++) {
+          vArr[v * 3 + 1] += vortexSpeeds[v];
+          if (vArr[v * 3 + 1] > 180) {
+            vArr[v * 3 + 1] = 2.5;
+          }
+          vortexAngles[v] += 0.05;
+          const y = vArr[v * 3 + 1];
+          const prog = y / 180;
+          const r = vortexRadii[v] * (1.0 + prog * 1.5);
+          vArr[v * 3] = Math.cos(vortexAngles[v]) * r;
+          vArr[v * 3 + 2] = Math.sin(vortexAngles[v]) * r;
+        }
+        vPosAttr.needsUpdate = true;
+      }
+
+      // 3. EARTHQUAKE: Clean, smooth concentric seismic shockwave ripples (Zero CPU/GPU lag)
+      if (earthquakeWavefrontsRef.current.length > 0 && intelModeRef.current === 'earthquakes') {
+        const curMag = liveMagnitudeRef.current;
+        const isJolt = seismicTriggerRef.current > 0;
+        const waveSpeedFactor = isJolt ? 1.6 : 1.0;
+
         earthquakeWavefrontsRef.current.forEach((wf) => {
           const { mesh, speed, phase, baseRadius, maxRadius, peakOpacity } = wf;
-          // Smooth continuous cycle in [0, 1)
-          const progress = (elapsed * speed + phase) % 1.0;
+          const progress = (elapsed * speed * waveSpeedFactor + phase) % 1.0;
           const currentRadius = baseRadius + progress * (maxRadius - baseRadius);
           mesh.scale.set(currentRadius, currentRadius, 1);
 
-          // Smooth cosine windowing for opacity: 0 at start, peak at middle, 0 at outer boundary
+          // Smooth sine windowing for opacity: 0 at start, peak at mid, 0 at outer perimeter
           const windowAlpha = Math.sin(progress * Math.PI);
           const mat = mesh.material as THREE.MeshBasicMaterial;
-          mat.opacity = Math.max(0, peakOpacity * windowAlpha);
+          mat.opacity = Math.max(0, peakOpacity * windowAlpha * (isJolt ? 1.15 : 0.85));
         });
       }
 
-      // Piezoelectric fault rupture sparks crackling along rift
-      if (earthquakeFaultSparksRef.current) {
-        const { points, progress, speeds, count } = earthquakeFaultSparksRef.current;
-        const posAttr = points.geometry.attributes.position as THREE.BufferAttribute;
-        const arr = posAttr.array as Float32Array;
+      // Realistic, tiered earthquake physical simulation (Small vs Larger vs Major)
+      if (landObjectsRef.current && intelModeRef.current === 'earthquakes') {
+        const { trees, poles, structures, cars, roadSegments } = landObjectsRef.current;
+        const curMag = liveMagnitudeRef.current;
+        const isJolt = seismicTriggerRef.current > 0;
+        const joltMult = isJolt ? 1.0 + seismicTriggerRef.current * 1.5 : 1.0;
 
-        for (let i = 0; i < count; i++) {
-          progress[i] = (progress[i] + speeds[i]) % 1.0;
-          const x = (progress[i] - 0.5) * 600;
-          const jitterZ = Math.sin(elapsed * 35.0 + i) * 3.5;
-          const jitterY = 2.8 + Math.abs(Math.sin(elapsed * 28.0 + i)) * 14.0;
-          arr[i * 3] = x;
-          arr[i * 3 + 1] = jitterY;
-          arr[i * 3 + 2] = x * 0.35 + jitterZ;
+        // -------------------------------------------------------------
+        // TIER 1: SMALL MAGNITUDE (M < 5.0)
+        // User request: "for small magnitude use form like that"
+        // Clean subtle form; gentle harmonic ground ripples;
+        // buildings remain calm and firm on foundation; road is stationary.
+        // -------------------------------------------------------------
+        if (curMag < 5.0) {
+          const smallRatio = Math.max(0.1, curMag / 5.0);
+          const microTremor = 0.003 * smallRatio * joltMult;
+
+          // Trees & poles: very gentle whisper micro-sway
+          trees.forEach((tree) => {
+            tree.group.rotation.z = Math.sin(elapsed * tree.freq + tree.phase) * microTremor;
+            tree.group.rotation.x = Math.cos(elapsed * (tree.freq * 0.8) + tree.phase) * (microTremor * 0.6);
+          });
+          poles.forEach((pole) => {
+            pole.group.rotation.z = Math.sin(elapsed * 10.0 + pole.phase) * (microTremor * 0.5);
+            pole.group.rotation.x = 0;
+          });
+
+          // Buildings: resting firm and still with faint micro-vibration
+          structures.forEach((st, sIdx) => {
+            st.group.rotation.z = Math.sin(elapsed * 8.0 + sIdx) * 0.0006;
+            st.group.rotation.x = Math.cos(elapsed * 6.0 + sIdx) * 0.0004;
+            st.group.position.y = st.baseY + Math.abs(Math.sin(elapsed * 10.0 + sIdx)) * 0.03;
+          });
+
+          // Cars: resting stationary
+          cars.forEach((car) => {
+            car.group.position.y = car.baseY;
+            car.group.rotation.z = 0;
+            car.group.rotation.x = 0;
+          });
+
+          // Road: perfectly smooth, peaceful and motionless
+          if (roadSegments) {
+            roadSegments.roadPlateWest.position.set(0, 0, 0);
+            roadSegments.roadPlateEast.position.set(0, 0, 0);
+            roadSegments.roadPlateWest.rotation.set(0, 0, 0);
+            roadSegments.roadPlateEast.rotation.set(0, 0, 0);
+            roadSegments.buckledSlabs.forEach((slab) => {
+              slab.mesh.position.y = slab.baseY;
+              slab.mesh.rotation.z = slab.baseRotZ;
+              slab.mesh.rotation.x = slab.baseRotX;
+            });
+          }
         }
-        posAttr.needsUpdate = true;
-      }
+        // -------------------------------------------------------------
+        // TIER 2: LARGER MAGNITUDE (5.0 <= M < 6.8)
+        // User request: "and larger magnitude users building shaking"
+        // Prominent, realistic building shaking! Resonant structural sway,
+        // pitch and roll rocking, timber creaking, roof and chimney vibrations;
+        // trees sway heavily, roadside utility poles oscillate side-to-side.
+        // -------------------------------------------------------------
+        else if (curMag < 6.8) {
+          const modRatio = (curMag - 4.8) / 2.0; // ~0.1 to 1.0
+          const bldgAmp = (0.024 + modRatio * 0.032) * joltMult;
+          const treeAmp = (0.020 + modRatio * 0.035) * joltMult;
+          const poleAmp = (0.018 + modRatio * 0.030) * joltMult;
 
-      // Epicenter reticle rotation & ground tremor vibration
-      if (earthquakeEpicenterRef.current) {
-        const { reticle, crosshair, beacon } = earthquakeEpicenterRef.current;
-        reticle.rotation.z = elapsed * 0.35;
-        crosshair.rotation.y = -elapsed * 0.15;
-        const beaconPulse = 0.4 + Math.sin(elapsed * 6.0) * 0.2;
-        (beacon.material as THREE.MeshBasicMaterial).opacity = beaconPulse;
-      }
+          // BUILDINGS SHAKING: Pitch, roll, and structural shudder
+          structures.forEach((st, sIdx) => {
+            const inertia = st.isBarn ? 1.25 : 1.0;
+            const rockZ = Math.sin(elapsed * (st.freq * 0.75) + sIdx * 1.5) * (bldgAmp * inertia);
+            const pitchX = Math.cos(elapsed * (st.freq * 0.6) + sIdx * 1.2) * (bldgAmp * 0.75 * inertia);
+            const vertJolt = Math.abs(Math.sin(elapsed * (st.freq * 1.3) + sIdx)) * (0.35 + modRatio * 0.5) * joltMult;
 
-      // Subterranean focal mechanism beachball & curved ray wave pulses
-      if (earthquakeHypocenterRef.current) {
-        const { beachballMesh, stressGroup, rayLines } = earthquakeHypocenterRef.current;
-        beachballMesh.rotation.y = elapsed * 0.45;
-        beachballMesh.rotation.x = Math.sin(elapsed * 0.3) * 0.25;
-        stressGroup.rotation.y = -elapsed * 0.2;
+            st.group.rotation.z = rockZ;
+            st.group.rotation.x = pitchX;
+            st.group.position.y = st.baseY + vertJolt;
+          });
 
-        rayLines.forEach((line, idx) => {
-          (line.material as any).dashOffset = -elapsed * (24.0 + (idx % 3) * 4.0);
-        });
-      }
+          // Trees swaying heavily
+          trees.forEach((tree) => {
+            tree.group.rotation.z = Math.sin(elapsed * tree.freq + tree.phase) * treeAmp;
+            tree.group.rotation.x = Math.cos(elapsed * (tree.freq * 0.8) + tree.phase) * (treeAmp * 0.65);
+          });
 
-      // Active 3D Seismometer Waveform & Traveling Scan Needle
-      if (seismogramTelemetryRef.current) {
-        const { line, scanMarker, startX, endX, baseY, baseZ, mag } = seismogramTelemetryRef.current;
-        const posAttr = line.geometry.attributes.position as THREE.BufferAttribute;
-        const arr = posAttr.array as Float32Array;
-        const count = posAttr.count;
-        const waveAmplitude = Math.min(48, Math.max(12, Math.pow(1.65, mag) * 0.8));
+          // Roadside utility poles swaying
+          poles.forEach((pole) => {
+            pole.group.rotation.z = Math.sin(elapsed * 12.0 + pole.phase) * poleAmp;
+            pole.group.rotation.x = Math.cos(elapsed * 9.0 + pole.phase) * (poleAmp * 0.4);
+          });
 
-        // Scan needle sweeps across record every 4.0 seconds
-        const scanCycle = (elapsed * 0.25) % 1.0;
-        const scanX = startX + scanCycle * (endX - startX);
-        scanMarker.position.set(scanX, baseY, baseZ);
+          // Cars bobbing on tires
+          cars.forEach((car) => {
+            car.group.position.y = car.baseY + Math.abs(Math.sin(elapsed * 16.0 + car.phase)) * (0.15 + modRatio * 0.25) * joltMult;
+            car.group.rotation.z = Math.sin(elapsed * 12.0 + car.phase) * 0.015 * modRatio;
+          });
 
-        for (let i = 0; i < count; i++) {
-          const x = arr[i * 3];
-          const norm = (x - startX) / (endX - startX);
-          let yOffset = 0;
+          // Road has subtle ground vibration
+          if (roadSegments) {
+            const roadVib = (0.04 + modRatio * 0.08) * joltMult;
+            roadSegments.roadPlateWest.position.y = Math.sin(elapsed * 16.0) * roadVib;
+            roadSegments.roadPlateEast.position.y = -Math.sin(elapsed * 16.0) * roadVib;
+            roadSegments.roadPlateWest.position.z = Math.cos(elapsed * 11.0) * (roadVib * 0.5);
+            roadSegments.roadPlateEast.position.z = -Math.cos(elapsed * 11.0) * (roadVib * 0.5);
+            roadSegments.buckledSlabs.forEach((slab, sIdx) => {
+              slab.mesh.position.y = slab.baseY + Math.abs(Math.sin(elapsed * 18.0 + sIdx)) * (roadVib * 0.6);
+            });
+          }
+        }
+        // -------------------------------------------------------------
+        // TIER 3: MAJOR / EVEN LARGER MAGNITUDE (M >= 6.8 to 8.5)
+        // User request: "and that's larger magnitude Use the road along with Road etc"
+        // Along with heavy building shaking, the road actively shakes,
+        // fractures, shifts, and shears across the fault rupture scarp!
+        // Buckled asphalt slabs bounce and clash; roadside utility poles tilt alarmingly;
+        // vehicles rock violently on the broken pavement!
+        // -------------------------------------------------------------
+        else {
+          const majorRatio = Math.min(1.0, (curMag - 6.6) / 1.7); // 0.1 to 1.0
+          const bldgAmp = (0.058 + majorRatio * 0.042) * joltMult;
+          const roadAmp = (0.65 + majorRatio * 0.95) * joltMult;
+          const slabAmp = (1.1 + majorRatio * 1.3) * joltMult;
 
-          if (norm < 0.22) {
-            // Background ambient microseisms
-            yOffset = Math.sin(x * 0.45 + elapsed * 12.0) * 1.5;
-          } else if (norm < 0.42) {
-            // P-Wave sharp compressional arrival
-            yOffset = Math.sin((x - startX) * 0.85 + elapsed * 18.0) * (waveAmplitude * 0.38) +
-              Math.cos(x * 1.8 + elapsed * 24.0) * (waveAmplitude * 0.15);
-          } else if (norm < 0.72) {
-            // S-Wave destructive shear packet
-            const peakDecay = 1.0 - (norm - 0.42) / 0.3;
-            yOffset =
-              Math.sin((x - startX) * 0.42 + elapsed * 16.0) * (waveAmplitude * peakDecay) +
-              Math.cos(x * 0.95 + elapsed * 22.0) * (waveAmplitude * 0.45 * peakDecay);
-          } else {
-            // Coda wave exponential attenuation
-            const codaDecay = Math.max(0, 1.0 - (norm - 0.72) / 0.28);
-            yOffset = Math.sin(x * 0.35 + elapsed * 8.0) * (waveAmplitude * 0.16 * codaDecay);
+          // 1. VIOLENT BUILDING SHAKING (Red Barn, Silo, Cottages, Farmhouses)
+          structures.forEach((st, sIdx) => {
+            const inertia = st.isBarn ? 1.3 : 1.0;
+            const rockZ = Math.sin(elapsed * (st.freq * 0.8) + sIdx * 1.5) * (bldgAmp * inertia);
+            const pitchX = Math.cos(elapsed * (st.freq * 0.65) + sIdx * 1.2) * (bldgAmp * 0.75 * inertia);
+            const vertJolt = Math.abs(Math.sin(elapsed * (st.freq * 1.4) + sIdx)) * (0.8 + majorRatio * 1.1) * joltMult;
+
+            st.group.rotation.z = rockZ;
+            st.group.rotation.x = pitchX;
+            st.group.position.y = st.baseY + vertJolt;
+          });
+
+          // 2. THE ROAD: TELESCOPING TECTONIC SHEAR & FAULT DISPLACEMENT ALONG WITH THE ROAD
+          if (roadSegments) {
+            const { roadPlateWest, roadPlateEast, buckledSlabs } = roadSegments;
+
+            // West plate tectonic heaving and lateral strike-slip fault offset
+            roadPlateWest.position.y = Math.sin(elapsed * 15.0) * roadAmp;
+            roadPlateWest.position.z = Math.cos(elapsed * 12.0) * (roadAmp * 1.4);
+            roadPlateWest.position.x = Math.sin(elapsed * 9.0) * (roadAmp * 0.45);
+            roadPlateWest.rotation.z = Math.sin(elapsed * 13.0) * (0.028 * majorRatio * joltMult);
+            roadPlateWest.rotation.x = Math.cos(elapsed * 10.0) * (0.022 * majorRatio * joltMult);
+
+            // East plate moves opposite across the active fault plane
+            roadPlateEast.position.y = -Math.sin(elapsed * 15.0) * roadAmp;
+            roadPlateEast.position.z = -Math.cos(elapsed * 12.0) * (roadAmp * 1.4);
+            roadPlateEast.position.x = -Math.sin(elapsed * 9.0) * (roadAmp * 0.45);
+            roadPlateEast.rotation.z = -Math.sin(elapsed * 13.0) * (0.028 * majorRatio * joltMult);
+            roadPlateEast.rotation.x = -Math.cos(elapsed * 10.0) * (0.022 * majorRatio * joltMult);
+
+            // Buckled asphalt slabs along the fault crossing violently bouncing and tilting
+            buckledSlabs.forEach((slab, sIdx) => {
+              const bounce = Math.abs(Math.sin(elapsed * 22.0 + sIdx * 1.8)) * slabAmp;
+              const tiltZ = Math.sin(elapsed * 16.0 + sIdx * 2.1) * (0.13 * majorRatio * joltMult);
+              const tiltX = Math.cos(elapsed * 18.0 + sIdx * 1.6) * (0.10 * majorRatio * joltMult);
+
+              slab.mesh.position.y = slab.baseY + bounce;
+              slab.mesh.rotation.z = slab.baseRotZ + tiltZ;
+              slab.mesh.rotation.x = slab.baseRotX + tiltX;
+            });
           }
 
-          arr[i * 3 + 1] = baseY + yOffset;
+          // 3. VEHICLES ON ROAD: Rocking and bouncing on shaking buckled asphalt
+          cars.forEach((car) => {
+            const carBounce = Math.abs(Math.sin(elapsed * 23.0 + car.phase)) * (0.75 + majorRatio * 0.85) * joltMult;
+            const carTiltZ = Math.sin(elapsed * 17.0 + car.phase) * (0.065 * majorRatio * joltMult);
+            const carTiltX = Math.cos(elapsed * 15.0 + car.phase) * (0.045 * majorRatio * joltMult);
+
+            car.group.position.y = car.baseY + carBounce;
+            car.group.rotation.z = carTiltZ;
+            car.group.rotation.x = carTiltX;
+          });
+
+          // 4. ROADSIDE UTILITY POLES & TREES: Violent swaying and leaning along the road
+          poles.forEach((pole) => {
+            const poleTilt = (0.065 + majorRatio * 0.055) * joltMult;
+            pole.group.rotation.z = Math.sin(elapsed * 13.0 + pole.phase) * poleTilt;
+            pole.group.rotation.x = Math.cos(elapsed * 10.5 + pole.phase) * (poleTilt * 0.45);
+          });
+
+          trees.forEach((tree) => {
+            const treeTilt = (0.060 + majorRatio * 0.050) * joltMult;
+            tree.group.rotation.z = Math.sin(elapsed * tree.freq + tree.phase) * treeTilt;
+            tree.group.rotation.x = Math.cos(elapsed * (tree.freq * 0.8) + tree.phase) * (treeTilt * 0.65);
+          });
         }
-        posAttr.needsUpdate = true;
       }
 
+      // Epicenter target ring subtle rotation
+      if (earthquakeEpicenterRef.current && intelModeRef.current === 'earthquakes') {
+        const { reticle, crosshair } = earthquakeEpicenterRef.current;
+        reticle.rotation.z = elapsed * 0.2;
+        crosshair.rotation.y = -elapsed * 0.1;
+      }
+
+      // Camera Seismic Tremor (Clean, grounded tremor during jolts or major earthquakes)
+      let camTremorX = 0;
+      let camTremorY = 0;
+      let camTremorZ = 0;
+      if (intelModeRef.current === 'earthquakes') {
+        const curMag = liveMagnitudeRef.current;
+        const isJolt = seismicTriggerRef.current > 0;
+        const magRumble = curMag >= 6.8 ? (curMag - 6.6) * 0.16 : 0;
+        const joltRumble = isJolt ? 0.35 * seismicTriggerRef.current : 0;
+        const totalRumble = magRumble + joltRumble;
+
+        if (totalRumble > 0) {
+          camTremorX = Math.sin(elapsed * 20.0) * totalRumble;
+          camTremorY = Math.cos(elapsed * 16.0) * (totalRumble * 0.65);
+          camTremorZ = Math.sin(elapsed * 14.0) * (totalRumble * 0.35);
+        }
+        if (isJolt) {
+          seismicTriggerRef.current = Math.max(0, seismicTriggerRef.current - 0.015);
+        }
+      }
+
+      camera.position.x += camTremorX;
+      camera.position.y += camTremorY;
+      camera.position.z += camTremorZ;
+
       renderer.render(scene, camera);
+
+      camera.position.x -= camTremorX;
+      camera.position.y -= camTremorY;
+      camera.position.z -= camTremorZ;
     };
     animate();
 
@@ -1879,21 +3103,29 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current && !isRightDraggingRef.current) return;
       const deltaX = e.clientX - previousMousePositionRef.current.x;
       const deltaY = e.clientY - previousMousePositionRef.current.y;
-
-      if (isDraggingRef.current) {
-        cameraAngleRef.current.theta += deltaX * 0.005;
-        cameraAngleRef.current.phi += deltaY * 0.005;
-      } else if (isRightDraggingRef.current) {
-        const panSpeed = 0.35;
-        cameraAngleRef.current.target.x -= deltaX * panSpeed;
-        cameraAngleRef.current.target.z -= deltaY * panSpeed;
-      }
-
-      updateCamera();
       previousMousePositionRef.current = { x: e.clientX, y: e.clientY };
+
+      if (isRightDraggingRef.current) {
+        // Pan Target
+        const panSpeed = 0.5;
+        const theta = cameraAngleRef.current.theta;
+        const forward = new THREE.Vector3(-Math.sin(theta), 0, -Math.cos(theta));
+        const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta));
+
+        cameraAngleRef.current.target.addScaledVector(right, -deltaX * panSpeed);
+        cameraAngleRef.current.target.addScaledVector(forward, deltaY * panSpeed);
+        updateCamera();
+      } else if (isDraggingRef.current) {
+        // Orbit Angles
+        cameraAngleRef.current.theta -= deltaX * 0.008;
+        cameraAngleRef.current.phi = Math.max(
+          0.05,
+          Math.min(Math.PI / 2.05, cameraAngleRef.current.phi - deltaY * 0.008)
+        );
+        updateCamera();
+      }
     };
 
     const handleMouseUp = () => {
@@ -1903,22 +3135,22 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      cameraAngleRef.current.radius = Math.max(
-        60,
-        Math.min(1800, cameraAngleRef.current.radius + e.deltaY * 0.6)
-      );
+      const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+      cameraAngleRef.current.radius = Math.max(35, Math.min(2200, cameraAngleRef.current.radius * zoomFactor));
       updateCamera();
     };
 
-    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
 
     const handleResize = () => {
-      if (!container || !renderer || !camera) return;
-      const w = container.clientWidth || window.innerWidth;
-      const h = container.clientHeight || window.innerHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
+      const w = containerRef.current.clientWidth || window.innerWidth;
+      const h = containerRef.current.clientHeight || window.innerHeight;
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(w, h);
     };
 
     container.addEventListener('mousedown', handleMouseDown);
@@ -1950,27 +3182,48 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
   // Watch for mode or target change and rebuild 3D mesh
   useEffect(() => {
+    if (sceneRef.current && ambientLightRef.current && sunLightRef.current) {
+      if (intelMode === 'earthquakes') {
+        sceneRef.current.background = new THREE.Color(0x89b0d6);
+        sceneRef.current.fog = new THREE.FogExp2(0xb0cae4, 0.0006);
+        ambientLightRef.current.color.setHex(0xdce7f0);
+        ambientLightRef.current.intensity = 1.6;
+        sunLightRef.current.color.setHex(0xfffbeb);
+        sunLightRef.current.intensity = 2.4;
+        sunLightRef.current.position.set(300, 600, 400);
+      } else if (intelMode === 'fires') {
+        sceneRef.current.background = new THREE.Color(0x2f4236);
+        sceneRef.current.fog = new THREE.FogExp2(0x3a4f42, 0.0007);
+        ambientLightRef.current.color.setHex(0x506555);
+        ambientLightRef.current.intensity = 1.5;
+        sunLightRef.current.color.setHex(0xffe8cc);
+        sunLightRef.current.intensity = 2.0;
+        sunLightRef.current.position.set(250, 450, 350);
+      } else {
+        sceneRef.current.background = new THREE.Color(0x020617);
+        sceneRef.current.fog = new THREE.FogExp2(0x030a1c, 0.0009);
+        ambientLightRef.current.color.setHex(0xffffff);
+        ambientLightRef.current.intensity = 1.4;
+        sunLightRef.current.color.setHex(0xffffff);
+        sunLightRef.current.intensity = 2.0;
+        sunLightRef.current.position.set(400, 800, 500);
+      }
+    }
+
     if (intelMode === 'flights') {
       build3DAircraftMesh(currentFlight);
-      if (onSelectLocationRef.current && currentFlight) {
-        onSelectLocationRef.current(currentFlight.lat, currentFlight.lon, `Flight ${currentFlight.callsign}`);
-      }
     } else if (intelMode === 'fires') {
-      build3DWildfireMesh(currentFire);
-      if (onSelectLocationRef.current && currentFire) {
-        onSelectLocationRef.current(currentFire.lat, currentFire.lon, currentFire.locationName || 'Wildfire Hotspot');
-      }
+      build3DWildfireMesh(currentFire, fireSceneType, interactiveFireIntensity ?? undefined);
     } else if (intelMode === 'earthquakes') {
       build3DEarthquakeMesh(currentEarthquake);
-      if (onSelectLocationRef.current && currentEarthquake) {
-        onSelectLocationRef.current(currentEarthquake.lat, currentEarthquake.lon, currentEarthquake.place || 'Earthquake Epicenter');
-      }
     }
   }, [
     intelMode,
     flightIndex,
     fireIndex,
     earthquakeIndex,
+    fireSceneType,
+    interactiveFireIntensity,
     build3DAircraftMesh,
     build3DWildfireMesh,
     build3DEarthquakeMesh,
@@ -1987,9 +3240,11 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
     } else if (intelMode === 'fires') {
       const nextIdx = (fireIndex + direction + activeFiresList.length) % activeFiresList.length;
       setFireIndex(nextIdx);
+      setInteractiveFireIntensity(null);
     } else {
       const nextIdx = (earthquakeIndex + direction + activeEarthquakesList.length) % activeEarthquakesList.length;
       setEarthquakeIndex(nextIdx);
+      setInteractiveMagnitude(null); // Reset to natural USGS magnitude
     }
   };
 
@@ -2034,198 +3289,167 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
   }, [intelMode, currentFlight, currentFire, currentEarthquake, lat, lon]);
 
   return (
-    <div className="relative w-full h-full bg-[#020408] select-none overflow-hidden font-sans">
+    <div className={`relative w-full h-full select-none overflow-hidden font-sans transition-colors duration-500 ${
+      intelMode === 'earthquakes' ? 'bg-[#89b0d6]' : intelMode === 'fires' ? 'bg-[#2f4236]' : 'bg-[#020408]'
+    }`}>
       {/* 3D WebGL Canvas Viewport */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* Top Left: Navigation & Tactical Telemetry Header */}
-      <div className="absolute top-6 left-6 z-30 flex flex-col gap-2.5 pointer-events-auto">
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-[#090d16]/90 border border-white/20 backdrop-blur-2xl shadow-2xl">
-          <button
-            onClick={onReturnToGlobe}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer border border-white/10"
-            title="Return to Orbital Daylight Earth"
-          >
-            <ChevronLeft className="w-4 h-4 text-sky-400" />
-            <span>Orbital Globe</span>
-          </button>
+      <div className="absolute top-6 left-6 z-30 flex flex-col gap-3 pointer-events-auto">
+        <div className="flex items-center gap-2">
+          {onReturnToGlobe && (
+            <button
+              onClick={onReturnToGlobe}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-black/60 hover:bg-black/80 border border-white/20 text-white font-medium text-xs shadow-2xl backdrop-blur-xl transition-all cursor-pointer hover:border-cyan-400 group active:scale-95"
+            >
+              <Globe className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform" />
+              <span>Return to Planetary Globe</span>
+            </button>
+          )}
 
-          <button
-            onClick={onOpenRoadMap}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-200 border border-white/10 text-xs font-semibold transition-all cursor-pointer"
-            title="Switch to 2D Road Map"
-          >
-            <Route className="w-3.5 h-3.5 text-emerald-400" />
-            <span>2D Road Map</span>
-          </button>
-
-          <div className="h-4 w-px bg-white/15 mx-1" />
-
-          {/* Current Target Identification Badge */}
-          <div className="flex items-center gap-2 px-2 text-xs font-mono text-white">
-            {intelMode === 'flights' ? (
-              <>
-                <Plane className="w-4 h-4 text-sky-400" />
-                <span className="font-bold text-white tracking-wider">{currentFlight?.callsign || 'ADS-B Target'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30 font-semibold">
-                  ADS-B Mesh
-                </span>
-              </>
-            ) : intelMode === 'fires' ? (
-              <>
-                <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
-                <span className="font-bold text-white tracking-wider truncate max-w-[160px]">
-                  {currentFire?.locationName || 'Wildfire Hotspot'}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 font-semibold">
-                  FIRMS Thermal Mesh
-                </span>
-              </>
-            ) : (
-              <>
-                <Activity className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="font-bold text-white tracking-wider truncate max-w-[180px]">
-                  {currentEarthquake?.place || 'Earthquake Epicenter'}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 font-semibold">
-                  M {typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude.toFixed(1) : '3.6'} Fault
-                </span>
-              </>
-            )}
-          </div>
+          {onOpenRoadMap && (
+            <button
+              onClick={() => onOpenRoadMap()}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-black/60 hover:bg-black/80 border border-white/20 text-white font-medium text-xs shadow-2xl backdrop-blur-xl transition-all cursor-pointer hover:border-emerald-400 active:scale-95"
+              title="View on Google Map Street View"
+            >
+              <MapPin className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Map View</span>
+            </button>
+          )}
         </div>
 
-        {/* Live Coordinate & Spatial Telemetry Bar */}
-        <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-[#090d16]/85 border border-white/15 backdrop-blur-xl text-[11px] font-mono text-neutral-300 shadow-xl">
-          <span>LAT: <strong className="text-white">{(typeof currentEntityCoords.lat === 'number' ? currentEntityCoords.lat : 0).toFixed(4)}°</strong></span>
-          <span>LON: <strong className="text-white">{(typeof currentEntityCoords.lon === 'number' ? currentEntityCoords.lon : 0).toFixed(4)}°</strong></span>
-          <span>CAM DIST: <strong className="text-white font-bold">{camTelemetry.distance}m</strong></span>
-          <span>PITCH: <strong className="text-white">{camTelemetry.pitch}°</strong></span>
-        </div>
-      </div>
+        {/* Tactical Intel Mode Switcher: Flights, Fires, Earthquakes */}
+        <div className="flex items-center p-1 rounded-2xl bg-black/70 border border-white/20 shadow-2xl backdrop-blur-xl">
+          <button
+            onClick={() => setIntelMode('flights')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              intelMode === 'flights'
+                ? 'bg-sky-500 text-black shadow-lg shadow-sky-500/30'
+                : 'text-neutral-300 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Plane className={`w-4 h-4 ${intelMode === 'flights' ? 'text-black' : 'text-sky-400'}`} />
+            <span>Airspace</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                intelMode === 'flights' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
+              }`}
+            >
+              {activeFlightsList.length}
+            </span>
+          </button>
 
-      {/* Top Center: MODE SWITCHER (Wildfires vs Earthquakes) */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 pointer-events-auto max-w-[94vw]">
-        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-[#090d16]/95 border border-white/20 shadow-2xl backdrop-blur-2xl">
-          {/* Wildfire Mode Button */}
           <button
             onClick={() => setIntelMode('fires')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               intelMode === 'fires'
-                ? 'bg-orange-500 text-black shadow-lg shadow-orange-500/30 font-extrabold'
+                ? 'bg-orange-500 text-black shadow-lg shadow-orange-500/30'
                 : 'text-neutral-300 hover:text-white hover:bg-white/10'
             }`}
           >
             <Flame className={`w-4 h-4 ${intelMode === 'fires' ? 'text-black' : 'text-orange-400 animate-pulse'}`} />
-            <span>3D Wildfires</span>
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-              intelMode === 'fires' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
-            }`}>
+            <span>Wildfires</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                intelMode === 'fires' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
+              }`}
+            >
               {activeFiresList.length}
             </span>
           </button>
 
-          {/* Earthquake Mode Button */}
           <button
             onClick={() => setIntelMode('earthquakes')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               intelMode === 'earthquakes'
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30 font-extrabold'
+                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30'
                 : 'text-neutral-300 hover:text-white hover:bg-white/10'
             }`}
           >
             <Activity className={`w-4 h-4 ${intelMode === 'earthquakes' ? 'text-black' : 'text-amber-400'}`} />
-            <span>3D Earthquakes</span>
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-              intelMode === 'earthquakes' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
-            }`}>
+            <span>Earthquakes</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                intelMode === 'earthquakes' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
+              }`}
+            >
               {activeEarthquakesList.length}
             </span>
           </button>
-
-          {/* Target Shifter: Previous & Next */}
-          <div className="flex items-center gap-1 pl-2 border-l border-white/20">
-            <button
-              onClick={() => handleShiftTarget(-1)}
-              className="p-1.5 rounded-lg hover:bg-white/15 text-neutral-300 hover:text-white transition-colors cursor-pointer"
-              title="Previous Target"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <span className="text-[11px] font-mono text-white px-1.5 font-bold">
-              {intelMode === 'flights'
-                ? `${(flightIndex % activeFlightsList.length) + 1}/${activeFlightsList.length}`
-                : intelMode === 'fires'
-                ? `${(fireIndex % activeFiresList.length) + 1}/${activeFiresList.length}`
-                : `${(earthquakeIndex % activeEarthquakesList.length) + 1}/${activeEarthquakesList.length}`}
-            </span>
-
-            <button
-              onClick={() => handleShiftTarget(1)}
-              className="p-1.5 rounded-lg hover:bg-white/15 text-neutral-300 hover:text-white transition-colors cursor-pointer"
-              title="Next Target"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
+      </div>
 
-        {/* Camera Vantage Presets */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#090d16]/80 border border-white/15 backdrop-blur-xl text-xs">
-          <span className="text-[10px] font-mono text-neutral-400 px-2 uppercase tracking-wider font-bold">Camera:</span>
-          {(
-            [
-              { id: 'orbit', label: 'Tactical Orbit' },
-              { id: 'chase', label: intelMode === 'flights' ? 'Chase Cam' : intelMode === 'fires' ? 'Perimeter View' : 'Fault Focus' },
-              { id: 'topdown', label: 'Nadir Overhead' },
-            ] as const
-          ).map((preset) => (
+      {/* Top Right: Camera Presets & Search */}
+      <div className="absolute top-6 right-6 z-30 flex items-center gap-2 pointer-events-auto">
+        {/* Vantage Presets */}
+        <div className="flex items-center p-1 rounded-2xl bg-black/60 border border-white/20 shadow-2xl backdrop-blur-xl">
+          {[
+            { id: 'orbit', label: 'Tactical Orbit' },
+            { id: 'chase', label: intelMode === 'flights' ? 'Chase Cam' : intelMode === 'fires' ? 'Perimeter View' : 'Fault Line' },
+            { id: 'topdown', label: 'Nadir 90°' },
+          ].map((preset) => (
             <button
               key={preset.id}
-              onClick={() => handleSetPreset(preset.id)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+              onClick={() => handleSetPreset(preset.id as any)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                 cameraViewPreset === preset.id
-                  ? 'bg-white/20 text-white border border-white/30'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'bg-white/20 text-white font-semibold'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/10'
               }`}
             >
               {preset.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Top Right: Target List Selector Dropdown Button */}
-      <div className="absolute top-6 right-6 z-30 flex items-center gap-2 pointer-events-auto">
+        {/* Target Entity Switcher & Search */}
         <button
-          onClick={() => setIsSearchOpen((prev) => !prev)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[#090d16]/90 border border-white/20 hover:bg-white/15 text-white text-xs font-semibold backdrop-blur-2xl shadow-xl transition-all cursor-pointer"
+          onClick={() => setIsSearchOpen(!isSearchOpen)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-black/60 hover:bg-black/80 border border-white/20 text-white font-medium text-xs shadow-2xl backdrop-blur-xl transition-all cursor-pointer hover:border-white/40"
+          title="Browse all targets"
         >
-          <Layers className="w-4 h-4 text-sky-400" />
-          <span>
-            Select{' '}
+          <Search className="w-4 h-4 text-cyan-400" />
+          <span className="hidden sm:inline">
             {intelMode === 'flights'
-              ? 'Aircraft'
+              ? currentFlight.callsign
               : intelMode === 'fires'
-              ? 'Wildfire'
-              : 'Earthquake'}
+              ? currentFire.locationName?.split(',')[0] || 'Wildfire Hotspot'
+              : currentEarthquake.place?.split(' of ')[1] || currentEarthquake.place || 'Seismic Epicenter'}
           </span>
         </button>
+
+        {/* Previous / Next Target Arrows */}
+        <div className="flex items-center rounded-2xl bg-black/60 border border-white/20 shadow-2xl backdrop-blur-xl overflow-hidden">
+          <button
+            onClick={() => handleShiftTarget(-1)}
+            className="p-2 hover:bg-white/10 text-neutral-300 hover:text-white transition-all cursor-pointer"
+            title="Previous hotspot"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleShiftTarget(1)}
+            className="p-2 hover:bg-white/10 text-neutral-300 hover:text-white transition-all cursor-pointer border-l border-white/10"
+            title="Next hotspot"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Target Selection Dropdown Drawer */}
+      {/* Target Selector Dropdown Modal */}
       {isSearchOpen && (
-        <div className="absolute top-20 right-6 z-40 w-84 max-h-[60vh] flex flex-col rounded-3xl bg-[#090d16]/95 border border-white/20 shadow-2xl backdrop-blur-2xl overflow-hidden animate-fade-in text-white pointer-events-auto">
+        <div className="absolute top-20 right-6 z-40 w-80 max-h-96 rounded-3xl bg-black/90 border border-white/20 shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden animate-fade-in pointer-events-auto">
           <div className="p-3 border-b border-white/10 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider font-mono">
+            <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
               Select {intelMode === 'flights' ? 'Flight' : intelMode === 'fires' ? 'Wildfire' : 'Earthquake'}
             </span>
             <button onClick={() => setIsSearchOpen(false)} className="text-neutral-400 hover:text-white cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
-
           <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar">
             {intelMode === 'flights' &&
               activeFlightsList.map((fl, idx) => (
@@ -2312,31 +3536,91 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
       )}
 
       {/* Bottom Floating Telemetry Card: SCIENTIFIC FIELDS */}
-      <div className="absolute bottom-6 left-6 z-30 w-full max-w-md pointer-events-auto animate-fade-in">
-        <div className="p-4 rounded-3xl bg-[#090d16]/95 border border-white/20 shadow-2xl backdrop-blur-2xl text-white font-sans space-y-3">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+      <div
+        className={`absolute bottom-6 z-30 transition-all duration-300 pointer-events-auto ${
+          telemetryDockSide === 'right' ? 'right-6' : 'left-6'
+        } ${isTelemetryCollapsed ? 'w-auto' : 'w-full max-w-sm sm:max-w-md'}`}
+      >
+        {isTelemetryCollapsed ? (
+          <div
+            onClick={() => setIsTelemetryCollapsed(false)}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-black/85 border border-white/20 shadow-2xl backdrop-blur-2xl text-white font-sans text-xs cursor-pointer hover:border-amber-400 hover:bg-black/95 transition-all group"
+            title="Expand real-time telemetry card"
+          >
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                   intelMode === 'flights' ? 'bg-sky-400' : intelMode === 'fires' ? 'bg-orange-400' : 'bg-amber-400'
-                }`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                }`}
+              ></span>
+              <span
+                className={`relative inline-flex rounded-full h-2 w-2 ${
                   intelMode === 'flights' ? 'bg-sky-500' : intelMode === 'fires' ? 'bg-orange-500' : 'bg-amber-500'
-                }`}></span>
-              </span>
-              <span className={`text-xs font-bold uppercase tracking-wider font-mono ${
+                }`}
+              ></span>
+            </span>
+            <span
+              className={`font-mono font-bold text-xs uppercase tracking-wider ${
                 intelMode === 'flights' ? 'text-sky-400' : intelMode === 'fires' ? 'text-orange-400' : 'text-amber-400'
-              }`}>
-                {intelMode === 'flights'
-                  ? 'OpenSky Network ADS-B Telemetry'
-                  : intelMode === 'fires'
-                  ? 'NASA FIRMS Satellite Telemetry'
-                  : 'USGS Real-Time Seismological Telemetry'}
-              </span>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-400">REAL-TIME 3D MESH</span>
+              }`}
+            >
+              {intelMode === 'flights'
+                ? `ADS-B ${currentFlight.callsign}`
+                : intelMode === 'fires'
+                ? `FRP ${Math.round(interactiveFireIntensity ?? currentFire.frp)} MW`
+                : `USGS M ${(interactiveMagnitude ?? (typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude : 6.0)).toFixed(1)}`}
+            </span>
+            <span className="text-[10px] text-neutral-400 font-mono flex items-center gap-1 group-hover:text-white">
+              <span>Show Telemetry</span>
+              <ChevronUp className="w-3.5 h-3.5" />
+            </span>
           </div>
+        ) : (
+          <div className="p-4 rounded-3xl bg-black/85 border border-white/20 shadow-2xl backdrop-blur-2xl text-white font-sans space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      intelMode === 'flights' ? 'bg-sky-400' : intelMode === 'fires' ? 'bg-orange-400' : 'bg-amber-400'
+                    }`}
+                  ></span>
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      intelMode === 'flights' ? 'bg-sky-500' : intelMode === 'fires' ? 'bg-orange-500' : 'bg-amber-500'
+                    }`}
+                  ></span>
+                </span>
+                <span
+                  className={`text-xs font-bold uppercase tracking-wider font-mono ${
+                    intelMode === 'flights' ? 'text-sky-400' : intelMode === 'fires' ? 'text-orange-400' : 'text-amber-400'
+                  }`}
+                >
+                  {intelMode === 'flights'
+                    ? 'OpenSky Network ADS-B Telemetry'
+                    : intelMode === 'fires'
+                    ? 'NASA FIRMS Satellite Telemetry'
+                    : 'USGS Real-Time Seismological Telemetry'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setTelemetryDockSide(telemetryDockSide === 'right' ? 'left' : 'right')}
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-400 hover:text-white transition-all cursor-pointer"
+                  title={`Move telemetry card to ${telemetryDockSide === 'right' ? 'left side' : 'right side'}`}
+                >
+                  {telemetryDockSide === 'right' ? <PanelLeft className="w-3.5 h-3.5" /> : <PanelRight className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => setIsTelemetryCollapsed(true)}
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-400 hover:text-white transition-all cursor-pointer"
+                  title="Minimize telemetry card"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
 
           {/* TELEMETRY GRID FOR AIRCRAFT */}
           {intelMode === 'flights' && (
@@ -2373,89 +3657,362 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
           {/* TELEMETRY GRID FOR WILDFIRE */}
           {intelMode === 'fires' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-orange-400" /> FRP
-                </span>
-                <p className="text-sm font-bold font-mono text-orange-300">{Math.round(currentFire.frp)} MW</p>
-                <span className="text-[9px] text-neutral-400">Radiative Power</span>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-orange-400" /> FRP
+                  </span>
+                  <p className="text-sm font-bold font-mono text-orange-300">
+                    {Math.round(interactiveFireIntensity ?? currentFire.frp)} MW
+                  </p>
+                  <span className="text-[9px] text-neutral-400">Radiative Power</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Flame className="w-3 h-3 text-red-400" /> Temperature
+                  </span>
+                  <p className="text-sm font-bold font-mono text-white">{Math.round(currentFire.brightness)} K</p>
+                  <span className="text-[9px] text-neutral-400">{Math.round(currentFire.brightness - 273.15)}°C</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Satellite className="w-3 h-3 text-sky-400" /> Satellite
+                  </span>
+                  <p className="text-xs font-bold font-mono text-sky-200 truncate">{currentFire.satellite}</p>
+                  <span className="text-[9px] text-neutral-400">{currentFire.confidence} conf</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Wind className="w-3 h-3 text-emerald-400" /> Dispersion
+                  </span>
+                  <p className="text-xs font-bold font-mono text-white">ENE 14 kts</p>
+                  <span className="text-[9px] text-neutral-400">Thermal Updraft</span>
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Flame className="w-3 h-3 text-red-400" /> Temperature
-                </span>
-                <p className="text-sm font-bold font-mono text-white">{Math.round(currentFire.brightness)} K</p>
-                <span className="text-[9px] text-neutral-400">{Math.round(currentFire.brightness - 273.15)}°C</span>
+              {/* Burning Source Scene Selector: ALL, TREES, TIRES, DEBRIS */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono">
+                  <span>BURNING MATERIAL IN GREENERY LANDSCAPE:</span>
+                  <span className="text-amber-400 font-semibold uppercase">
+                    {fireSceneType === 'all'
+                      ? '🌲 All Burning (Trees + Tires + Debris)'
+                      : fireSceneType === 'trees'
+                      ? '🌲 Burning Forest Trees'
+                      : fireSceneType === 'tires'
+                      ? '🛞 Scrap Rubber Tires'
+                      : '🏭 Massive Debris Inferno'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button
+                    onClick={() => {
+                      setFireSceneType('all');
+                      build3DWildfireMesh(currentFire, 'all', interactiveFireIntensity ?? undefined);
+                    }}
+                    className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      fireSceneType === 'all'
+                        ? 'bg-orange-500/25 text-orange-300 border-orange-500/60 shadow-sm shadow-orange-500/20'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span>🔥 All</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFireSceneType('trees');
+                      build3DWildfireMesh(currentFire, 'trees', interactiveFireIntensity ?? undefined);
+                    }}
+                    className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      fireSceneType === 'trees'
+                        ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-sm shadow-emerald-500/20'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span>🌲 Trees</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFireSceneType('tires');
+                      build3DWildfireMesh(currentFire, 'tires', interactiveFireIntensity ?? undefined);
+                    }}
+                    className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      fireSceneType === 'tires'
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow-sm shadow-amber-500/20'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span>🛞 Tires</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFireSceneType('debris');
+                      build3DWildfireMesh(currentFire, 'debris', interactiveFireIntensity ?? undefined);
+                    }}
+                    className={`flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      fireSceneType === 'debris'
+                        ? 'bg-red-500/25 text-red-300 border-red-500/60 shadow-sm shadow-red-500/20'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span>🏭 Debris</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Satellite className="w-3 h-3 text-sky-400" /> Satellite
-                </span>
-                <p className="text-xs font-bold font-mono text-sky-200 truncate">{currentFire.satellite}</p>
-                <span className="text-[9px] text-neutral-400">{currentFire.confidence} conf</span>
+              {/* Fire Radiative Power (FRP) Intensity Live Controller */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono">
+                  <span>FIRE INTENSITY SIMULATOR:</span>
+                  <span className="text-orange-400 font-bold font-mono">
+                    {Math.round(interactiveFireIntensity ?? currentFire.frp)} MW {
+                      (interactiveFireIntensity ?? currentFire.frp) < 100
+                        ? '• Gentle Spot Fire'
+                        : (interactiveFireIntensity ?? currentFire.frp) < 300
+                        ? '• Active Wildfire'
+                        : (interactiveFireIntensity ?? currentFire.frp) < 600
+                        ? '• High Intensity Conflagration'
+                        : '• Extreme Roaring Firestorm'
+                    }
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 flex-1">
+                    {[
+                      { label: '80 MW Low', val: 80 },
+                      { label: '250 MW Mid', val: 250 },
+                      { label: '750 MW Storm', val: 750 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        onClick={() => {
+                          setInteractiveFireIntensity(preset.val);
+                          build3DWildfireMesh(currentFire, fireSceneType, preset.val);
+                        }}
+                        className={`px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-center ${
+                          (interactiveFireIntensity ?? currentFire.frp) === preset.val
+                            ? 'bg-orange-500/25 text-orange-300 border-orange-500/60 shadow-sm shadow-orange-500/20'
+                            : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {interactiveFireIntensity !== null && (
+                    <button
+                      onClick={() => {
+                        setInteractiveFireIntensity(null);
+                        build3DWildfireMesh(currentFire, fireSceneType, currentFire.frp);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-mono text-neutral-300 hover:text-white bg-white/10 border border-white/15 hover:bg-white/20 cursor-pointer transition-all"
+                      title="Reset to natural satellite sensor FRP"
+                    >
+                      Reset FRP
+                    </button>
+                  )}
+                </div>
+
+                {/* Fire Intensity Live Range Slider */}
+                <div className="flex items-center gap-2 px-1 pt-0.5">
+                  <span className="text-[10px] font-mono text-neutral-400">50 MW</span>
+                  <input
+                    type="range"
+                    min="50"
+                    max="1000"
+                    step="25"
+                    value={interactiveFireIntensity ?? Math.round(currentFire.frp)}
+                    onChange={(e) => {
+                      const newFrp = parseInt(e.target.value, 10);
+                      setInteractiveFireIntensity(newFrp);
+                      build3DWildfireMesh(currentFire, fireSceneType, newFrp);
+                    }}
+                    className="flex-1 accent-orange-500 cursor-pointer h-1.5 bg-white/10 rounded-lg appearance-none"
+                  />
+                  <span className="text-[10px] font-mono text-neutral-400">1000 MW</span>
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Wind className="w-3 h-3 text-emerald-400" /> Dispersion
-                </span>
-                <p className="text-xs font-bold font-mono text-white">ENE 14 kts</p>
-                <span className="text-[9px] text-neutral-400">Thermal Updraft</span>
+              {/* Thermal Surge Trigger */}
+              <div className="pt-1 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => {
+                    fireSurgeTriggerRef.current = 1.0;
+                    setFireSurgeActive(true);
+                    setTimeout(() => setFireSurgeActive(false), 2400);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 text-black hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-lg shadow-orange-500/25"
+                >
+                  <Flame className="w-3.5 h-3.5 text-black" />
+                  <span>{fireSurgeActive ? '🔥 Thermal Updraft Surge Active' : '🔥 Trigger Thermal Convection Surge'}</span>
+                </button>
               </div>
-            </div>
+            </>
           )}
 
           {/* TELEMETRY GRID FOR EARTHQUAKE */}
           {intelMode === 'earthquakes' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Activity className="w-3 h-3 text-red-400" /> Magnitude
-                </span>
-                <p className="text-sm font-bold font-mono text-red-300">
-                  M {typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude.toFixed(1) : '3.6'}
-                </p>
-                <span className="text-[9px] text-neutral-400">Richter/Moment</span>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Activity className="w-3 h-3 text-red-400" /> Magnitude
+                  </span>
+                  <p className="text-sm font-bold font-mono text-red-300">
+                    M {(interactiveMagnitude ?? (typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude : 6.0)).toFixed(1)}
+                  </p>
+                  <span className="text-[9px] text-neutral-400">{interactiveMagnitude !== null ? 'Interactive Simulator' : 'USGS Real Sensor'}</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <ArrowDown className="w-3 h-3 text-amber-400" /> Focal Depth
+                  </span>
+                  <p className="text-sm font-bold font-mono text-white">
+                    {Math.round(currentEarthquake?.depth ?? 10)} km
+                  </p>
+                  <span className="text-[9px] text-neutral-400">Hypocenter Depth</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3 text-yellow-400" /> Ground Shake
+                  </span>
+                  <p className="text-xs font-bold font-mono text-yellow-200 truncate">
+                    {(interactiveMagnitude ?? currentEarthquake?.magnitude ?? 6.0) < 4.5
+                      ? 'IV Light Tremor'
+                      : (interactiveMagnitude ?? currentEarthquake?.magnitude ?? 6.0) < 6.0
+                      ? 'VI Strong Shaking'
+                      : (interactiveMagnitude ?? currentEarthquake?.magnitude ?? 6.0) < 7.3
+                      ? 'VIII Severe Rolling'
+                      : 'X Major Surface Waves'}
+                  </p>
+                  <span className="text-[9px] text-neutral-400">Modified Mercalli</span>
+                </div>
+
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
+                    <Radio className="w-3 h-3 text-emerald-400" /> Felt Reports
+                  </span>
+                  <p className="text-xs font-bold font-mono text-emerald-300">
+                    {currentEarthquake?.felt ? `${currentEarthquake.felt.toLocaleString()} DYFI` : 'USGS NEIC'}
+                  </p>
+                  <span className="text-[9px] text-neutral-400">
+                    {currentEarthquake?.tsunami ? 'Tsunami Threat' : 'No Tsunami'}
+                  </span>
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <ArrowDown className="w-3 h-3 text-amber-400" /> Focal Depth
-                </span>
-                <p className="text-sm font-bold font-mono text-white">
-                  {Math.round(currentEarthquake?.depth ?? 10)} km
-                </p>
-                <span className="text-[9px] text-neutral-400">Hypocenter Depth</span>
+              {/* Normal Land Magnitude Shaking Controller */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono">
+                  <span>MAGNITUDE TIER SIMULATOR:</span>
+                  <span className="text-red-400 font-bold font-mono">
+                    M {(interactiveMagnitude ?? (currentEarthquake?.magnitude || 6.0)).toFixed(1)} {
+                      (interactiveMagnitude ?? (currentEarthquake?.magnitude || 6.0)) < 5.0
+                        ? '• Subtle Waveform (Stable Buildings & Road)'
+                        : (interactiveMagnitude ?? (currentEarthquake?.magnitude || 6.0)) < 6.8
+                        ? '• Strong Shaking (Buildings Shaking & Swaying)'
+                        : '• Major Rupture (Road Shearing & Asphalt Buckling)'
+                    }
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 flex-1">
+                    {[
+                      { label: 'M 3.8 Light', magVal: 3.8, title: 'Gentle ground ripples, stable buildings & smooth intact road' },
+                      { label: 'M 5.8 Strong', magVal: 5.8, title: 'Visible building shaking, timber creaking & structural sway' },
+                      { label: 'M 7.8 Severe', magVal: 7.8, title: 'Road plates shear, buckled asphalt bounces & buildings rock' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        onClick={() => {
+                          setInteractiveMagnitude(preset.magVal);
+                          liveMagnitudeRef.current = preset.magVal;
+                          build3DEarthquakeMesh(currentEarthquake, preset.magVal);
+                        }}
+                        title={preset.title}
+                        className={`px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-center ${
+                          (interactiveMagnitude ?? currentEarthquake?.magnitude) === preset.magVal
+                            ? 'bg-red-500/20 text-red-300 border-red-500/50 shadow-sm shadow-red-500/20'
+                            : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {interactiveMagnitude !== null && (
+                    <button
+                      onClick={() => {
+                        setInteractiveMagnitude(null);
+                        const naturalMag = typeof currentEarthquake?.magnitude === 'number' ? currentEarthquake.magnitude : 6.0;
+                        liveMagnitudeRef.current = naturalMag;
+                        build3DEarthquakeMesh(currentEarthquake, naturalMag);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-mono text-neutral-300 hover:text-white bg-white/10 border border-white/15 hover:bg-white/20 cursor-pointer transition-all"
+                      title="Reset to natural USGS sensor magnitude"
+                    >
+                      Reset USGS
+                    </button>
+                  )}
+                </div>
+
+                {/* Magnitude Live Range Slider */}
+                <div className="flex items-center gap-2 px-1 pt-0.5">
+                  <span className="text-[10px] font-mono text-neutral-400">M 3.0</span>
+                  <input
+                    type="range"
+                    min="3.0"
+                    max="8.5"
+                    step="0.1"
+                    value={interactiveMagnitude ?? (currentEarthquake?.magnitude || 6.0)}
+                    onChange={(e) => {
+                      const newMag = parseFloat(e.target.value);
+                      setInteractiveMagnitude(newMag);
+                      liveMagnitudeRef.current = newMag;
+                    }}
+                    onPointerUp={(e) => {
+                      const newMag = parseFloat((e.target as HTMLInputElement).value);
+                      build3DEarthquakeMesh(currentEarthquake, newMag);
+                    }}
+                    onTouchEnd={(e) => {
+                      const newMag = parseFloat((e.target as HTMLInputElement).value);
+                      build3DEarthquakeMesh(currentEarthquake, newMag);
+                    }}
+                    className="flex-1 accent-red-500 cursor-pointer h-1.5 bg-white/10 rounded-lg appearance-none"
+                  />
+                  <span className="text-[10px] font-mono text-neutral-400">M 8.5</span>
+                </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <ShieldAlert className="w-3 h-3 text-yellow-400" /> Shake Severity
-                </span>
-                <p className="text-xs font-bold font-mono text-yellow-200 truncate">
-                  MMI {typeof currentEarthquake?.mmi === 'number' ? currentEarthquake.mmi.toFixed(1) : (currentEarthquake?.magnitude ?? 0) > 7.0 ? 'VIII Severe' : 'VI Strong'}
-                </p>
-                <span className="text-[9px] text-neutral-400">Modified Mercalli</span>
+              {/* Seismic Shockwave Trigger */}
+              <div className="pt-1 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => {
+                    seismicTriggerRef.current = 1.0;
+                    setSeismicActive(true);
+                    setTimeout(() => setSeismicActive(false), 2400);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-red-600 via-amber-400 to-sky-400 text-black hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-lg shadow-red-500/25"
+                >
+                  <Zap className="w-3.5 h-3.5 text-black" />
+                  <span>{seismicActive ? '💥 Seismic Wavefront Active' : '⚡ Trigger Seismic Rupture Shockwave'}</span>
+                </button>
               </div>
-
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1">
-                  <Radio className="w-3 h-3 text-emerald-400" /> Felt Reports
-                </span>
-                <p className="text-xs font-bold font-mono text-emerald-300">
-                  {currentEarthquake?.felt ? `${currentEarthquake.felt.toLocaleString()} DYFI` : 'USGS NEIC'}
-                </p>
-                <span className="text-[9px] text-neutral-400">
-                  {currentEarthquake?.tsunami ? 'Tsunami Threat' : 'No Tsunami'}
-                </span>
-              </div>
-            </div>
+            </>
           )}
         </div>
-      </div>
+      )}
     </div>
-  );
+  </div>
+);
 };

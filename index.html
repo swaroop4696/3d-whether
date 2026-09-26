@@ -15,6 +15,34 @@
     <!-- Google Maps JavaScript API is loaded dynamically with URL-restricted key -->
   </head>
   <body class="bg-[#060913] text-slate-100 overflow-hidden select-none">
+    <!-- Fast Torch Initial Bootloader -->
+    <div id="fast-torch-loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#030611] transition-opacity duration-300">
+      <div class="relative flex flex-col items-center">
+        <!-- Torch Ring & Core -->
+        <div class="relative w-20 h-20 flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full border-2 border-sky-500/20 animate-ping"></div>
+          <div class="absolute inset-0 rounded-full border border-sky-400/40 animate-spin" style="animation-duration: 1.5s;"></div>
+          <!-- Fast Torch Beam -->
+          <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-400 via-sky-400 to-cyan-300 flex items-center justify-center shadow-[0_0_40px_rgba(56,189,248,0.8)] animate-pulse">
+            <svg class="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
+            </svg>
+          </div>
+        </div>
+        <!-- Fast Torch Title & Indicator -->
+        <div class="mt-5 text-center">
+          <div class="flex items-center gap-2 justify-center">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span class="text-sm font-bold tracking-wider uppercase font-mono text-white">GeoAtmosphere 3D</span>
+          </div>
+          <p class="text-xs text-sky-300 font-mono mt-1 tracking-tight">Fast Torch Engine • Ignition Active</p>
+        </div>
+        <!-- High-speed loading beam line -->
+        <div class="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4">
+          <div class="h-full bg-gradient-to-r from-amber-400 via-sky-400 to-cyan-300 w-full animate-pulse"></div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
