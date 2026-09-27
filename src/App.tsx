@@ -504,7 +504,7 @@ export default function App() {
       </div>
 
       {/* 2b. Spatial Intelligence Overlay Dock (NASA FIRMS, USGS Earthquakes, OpenSky Flights) */}
-      {!isGoogleMapView && viewMode !== 'godseye3d' && (
+      {!isGoogleMapView && viewMode !== 'godseye3d' && !isCardOpen && (
         <IntelligenceDock
           fires={fires}
           earthquakes={earthquakes}
@@ -516,7 +516,7 @@ export default function App() {
         />
       )}
 
-      {/* 2c. God's Eye 3D Mesh (Dedicated Live Aircraft, Wildfires & Earthquakes) */}
+      {/* 2c. God's Eye 3D Mesh (Dedicated Wildfires & Earthquakes) */}
       {viewMode === 'godseye3d' && (
         <div className="absolute inset-0 w-full h-full z-20 pointer-events-auto">
           <GodsEye3DView
@@ -530,19 +530,20 @@ export default function App() {
             earthquakes={earthquakes}
             flights={flights}
             onSelectIntelEvent={handleSelectIntelEvent}
-            initialMode={meshIntelMode}
+            initialMode={meshIntelMode === 'flights' ? 'fires' : meshIntelMode}
           />
         </div>
       )}
 
-      {/* 4. Floating Minimalist Navigation Island */}
-      <FloatingNavbar
-        onSelectCity={handleSelectCity}
-        onDetectGps={handleDetectGps}
-        isDetectingGps={isDetectingGps}
-        autoRotate={autoRotate}
-        onToggleAutoRotate={() => setAutoRotate(!autoRotate)}
-        onResetView={handleReturnToOrbit}
+      {/* 4. Floating Minimalist Navigation Island (Hidden in 3D God's Eye to avoid overlapping controls) */}
+      {viewMode !== 'godseye3d' && (
+        <FloatingNavbar
+          onSelectCity={handleSelectCity}
+          onDetectGps={handleDetectGps}
+          isDetectingGps={isDetectingGps}
+          autoRotate={autoRotate}
+          onToggleAutoRotate={() => setAutoRotate(!autoRotate)}
+          onResetView={handleReturnToOrbit}
         currentCityName={cityName}
         isStreetMapOpen={isGoogleMapView}
         onToggleStreetMap={() => {
@@ -560,6 +561,7 @@ export default function App() {
         citizenReportCount={citizenReports.length}
         onOpenGeminiAssistant={() => setIsGeminiAssistantOpen(true)}
       />
+      )}
 
       {/* 5. Weather GPT Floating Minimalist Glass Card - Hidden in 3D Mode */}
       {viewMode !== 'godseye3d' && isCardOpen && (
@@ -645,6 +647,10 @@ export default function App() {
         currentLon={currentLon}
         currentLocationName={cityName || 'Orbital Vantage'}
         currentMode={viewMode}
+        weather={weather}
+        aqi={aqi}
+        fires={fires}
+        earthquakes={earthquakes}
         onExecuteAction={(action) => {
           if (action.action === 'flyTo' && action.targetLocation) {
             if (action.targetLocation.lat && action.targetLocation.lon) {

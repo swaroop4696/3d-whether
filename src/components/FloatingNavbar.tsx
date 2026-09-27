@@ -4,11 +4,9 @@ import {
   Navigation,
   X,
   Loader2,
-  Key,
   Globe,
   RotateCw,
   Map,
-  RotateCcw,
   ShieldAlert,
   Building2,
   Route,
@@ -20,11 +18,9 @@ import {
   Settings,
   Bot,
   Sparkles,
-  Mic,
 } from 'lucide-react';
-import { searchLocations, getCustomOwmKey, setCustomOwmKey } from '../services/weatherService';
+import { searchLocations } from '../services/weatherService';
 import type { CitySearchResult, PlaceCategory, ViewModeType } from '../types';
-import { KeyRestrictionsModal } from './KeyRestrictionsModal';
 
 interface FloatingNavbarProps {
   onSelectCity: (city: CitySearchResult) => void;
@@ -67,9 +63,6 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
   const [results, setResults] = useState<CitySearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
-  const [isKeyRestrictionsOpen, setIsKeyRestrictionsOpen] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState(() => getCustomOwmKey());
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -111,11 +104,6 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
     onSelectCity(item);
     setQuery('');
     setIsDropdownOpen(false);
-  };
-
-  const handleSaveApiKey = () => {
-    setCustomOwmKey(apiKeyInput);
-    setIsKeyModalOpen(false);
   };
 
   const renderTypeIcon = (type?: PlaceCategory) => {
@@ -298,30 +286,20 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
               </button>
             )}
 
-            {/* Gemini Planetary Copilot: Chatbot & Live Voice API */}
+            {/* Gemini Planetary Copilot: Chatbot & Autonomous Earth Navigation */}
             {onOpenGeminiAssistant && (
               <button
                 onClick={onOpenGeminiAssistant}
-                title="Open Gemini Planetary Copilot (Multi-Turn Chatbot & gemini-3.8-live Voice)"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer bg-gradient-to-r from-purple-500/20 to-sky-500/20 hover:from-purple-500/30 hover:to-sky-500/30 border border-purple-400/40 text-purple-200 active:scale-95 shadow-sm shadow-purple-500/20 mr-1"
+                title="Open Gemini Planetary Copilot (AI Intelligence & Chat)"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer bg-gradient-to-r from-sky-500/20 to-purple-500/20 hover:from-sky-500/30 hover:to-purple-500/30 border border-sky-400/40 text-sky-200 active:scale-95 shadow-sm shadow-sky-500/20 mr-1"
               >
-                <Sparkles className="w-3 h-3 text-purple-300 animate-pulse" />
+                <Sparkles className="w-3 h-3 text-sky-300 animate-pulse" />
                 <span className="hidden sm:inline">Gemini AI</span>
-                <span className="flex items-center gap-0.5 px-1 py-0.2 rounded-full text-[9px] font-mono bg-purple-500/30 text-purple-200">
-                  <Mic className="w-2.5 h-2.5" /> Live
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-sky-500/25 text-sky-300">
+                  Chat
                 </span>
               </button>
             )}
-
-            {/* Reset to Orbit Vantage Button */}
-            <button
-              onClick={onResetView}
-              id="btn-nav-reset-view"
-              title="Reset View to Orbit"
-              className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
 
             {/* GPS Live Geolocation Button */}
             <button
@@ -342,15 +320,6 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
               }`}
             >
               <RotateCw className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Settings & Optional API Configuration */}
-            <button
-              onClick={() => setIsKeyRestrictionsOpen(true)}
-              title="Application Settings & Optional Keys"
-              className="p-1.5 rounded-full text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors cursor-pointer"
-            >
-              <Settings className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -420,101 +389,34 @@ export const FloatingNavbar: React.FC<FloatingNavbarProps> = ({
         <span>Click anywhere on the 3D globe to zoom in and inspect real-time atmosphere</span>
       </div>
 
-      {/* Quick Location Pills at Top */}
-      <div className="fixed top-20 inset-x-0 mx-auto w-max max-w-[95vw] z-10 pointer-events-auto hidden md:flex items-center gap-2 overflow-x-auto py-1 px-3">
-        {[
-          { name: 'New Delhi', country: 'India', lat: 28.6139, lon: 77.2090 },
-          { name: 'Beijing', country: 'China', lat: 39.9042, lon: 116.4074 },
-          { name: 'Moscow', country: 'Russia', lat: 55.7558, lon: 37.6173 },
-          { name: 'Brasília', country: 'Brazil', lat: -15.7975, lon: -47.8919 },
-          { name: 'Pretoria', country: 'South Africa', lat: -25.7479, lon: 28.2293 },
-          { name: 'Cairo', country: 'Egypt', lat: 30.0444, lon: 31.2357 },
-          { name: 'Abu Dhabi', country: 'United Arab Emirates', lat: 24.4539, lon: 54.3773 },
-          { name: 'Riyadh', country: 'Saudi Arabia', lat: 24.7136, lon: 46.6753 },
-          { name: 'Tehran', country: 'Iran', lat: 35.6892, lon: 51.3890 },
-        ].map((loc) => (
-          <button
-            key={loc.name}
-            onClick={() => onSelectCity(loc)}
-            className={`px-3 py-1 rounded-full text-[11px] font-light transition-all cursor-pointer backdrop-blur-md border ${
-              currentCityName === loc.name
-                ? 'bg-sky-500/20 text-sky-300 border-sky-400/30'
-                : 'bg-black/35 hover:bg-black/50 text-slate-400 hover:text-slate-200 border-white/5'
-            }`}
-          >
-            {loc.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Optional Custom API Key Modal */}
-      {isKeyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm pointer-events-auto">
-          <div
-            className="weather-gpt-glass max-w-md w-full p-6 text-white space-y-4"
-            style={{
-              background: 'rgba(20, 20, 20, 0.85)',
-              backdropFilter: 'blur(32px)',
-              WebkitBackdropFilter: 'blur(32px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '24px',
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Key className="w-4 h-4 text-sky-400" />
-                <h3 className="text-base font-light text-white">OpenWeatherMap API Key</h3>
-              </div>
-              <button
-                onClick={() => setIsKeyModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400 font-light leading-relaxed">
-              The application connects out-of-the-box using the Open-Meteo real-time global feed.
-              If you have an OpenWeatherMap key, paste it here to query the OpenWeatherMap
-              telemetry API directly.
-            </p>
-
-            <div>
-              <label className="text-[11px] text-slate-400 font-mono block mb-1.5">
-                OPENWEATHER API KEY
-              </label>
-              <input
-                type="text"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="e.g. 3a7f82b..."
-                className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setIsKeyModalOpen(false)}
-                className="px-3.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveApiKey}
-                className="px-4 py-1.5 rounded-xl bg-sky-500/25 hover:bg-sky-500/35 border border-sky-400/40 text-xs text-sky-300 font-medium transition-colors cursor-pointer"
-              >
-                Save Key
-              </button>
-            </div>
-          </div>
+      {/* Quick Location Pills at Top - Exclusively in Globe View and constrained to avoid IntelligenceDock overlap */}
+      {viewMode === 'globe' && !isStreetMapOpen && (
+        <div className="fixed top-[72px] left-1/2 -translate-x-1/2 z-10 pointer-events-auto hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/5 max-w-[calc(100vw-420px)] overflow-x-auto no-scrollbar">
+          {[
+            { name: 'New Delhi', country: 'India', lat: 28.6139, lon: 77.2090 },
+            { name: 'Beijing', country: 'China', lat: 39.9042, lon: 116.4074 },
+            { name: 'Moscow', country: 'Russia', lat: 55.7558, lon: 37.6173 },
+            { name: 'Brasília', country: 'Brazil', lat: -15.7975, lon: -47.8919 },
+            { name: 'Pretoria', country: 'South Africa', lat: -25.7479, lon: 28.2293 },
+            { name: 'Cairo', country: 'Egypt', lat: 30.0444, lon: 31.2357 },
+            { name: 'Abu Dhabi', country: 'United Arab Emirates', lat: 24.4539, lon: 54.3773 },
+            { name: 'Riyadh', country: 'Saudi Arabia', lat: 24.7136, lon: 46.6753 },
+            { name: 'Tehran', country: 'Iran', lat: 35.6892, lon: 51.3890 },
+          ].map((loc) => (
+            <button
+              key={loc.name}
+              onClick={() => onSelectCity(loc)}
+              className={`px-3 py-1 rounded-full text-[11px] font-light transition-all cursor-pointer backdrop-blur-md border shrink-0 ${
+                currentCityName === loc.name
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-400/30'
+                  : 'bg-black/35 hover:bg-black/50 text-slate-400 hover:text-slate-200 border-white/5'
+              }`}
+            >
+              {loc.name}
+            </button>
+          ))}
         </div>
       )}
-
-      {/* Google Maps Key Restrictions & Security Modal (gods-eye-view model) */}
-      <KeyRestrictionsModal
-        isOpen={isKeyRestrictionsOpen}
-        onClose={() => setIsKeyRestrictionsOpen(false)}
-      />
     </>
   );
 };

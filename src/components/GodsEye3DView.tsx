@@ -708,13 +708,14 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Active Intel Mode: 'flights', 'fires', or 'earthquakes'
-  const [intelMode, setIntelMode] = useState<MeshIntelMode>(initialMode);
+  // Active Intel Mode: 'fires' or 'earthquakes' (planes removed per user request)
+  const sanitizedInitialMode: MeshIntelMode = initialMode === 'flights' ? 'fires' : initialMode;
+  const [intelMode, setIntelMode] = useState<MeshIntelMode>(sanitizedInitialMode);
 
   // Sync initialMode when parent prop changes
   useEffect(() => {
     if (initialMode) {
-      setIntelMode(initialMode);
+      setIntelMode(initialMode === 'flights' ? 'fires' : initialMode);
     }
   }, [initialMode]);
 
@@ -3234,10 +3235,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
 
   // Shift to Next / Previous Target
   const handleShiftTarget = (direction: 1 | -1) => {
-    if (intelMode === 'flights') {
-      const nextIdx = (flightIndex + direction + activeFlightsList.length) % activeFlightsList.length;
-      setFlightIndex(nextIdx);
-    } else if (intelMode === 'fires') {
+    if (intelMode === 'fires') {
       const nextIdx = (fireIndex + direction + activeFiresList.length) % activeFiresList.length;
       setFireIndex(nextIdx);
       setInteractiveFireIntensity(null);
@@ -3320,26 +3318,8 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
           )}
         </div>
 
-        {/* Tactical Intel Mode Switcher: Flights, Fires, Earthquakes */}
+        {/* Tactical Intel Mode Switcher: Fires & Earthquakes (Clean 2-tier HUD) */}
         <div className="flex items-center p-1 rounded-2xl bg-black/70 border border-white/20 shadow-2xl backdrop-blur-xl">
-          <button
-            onClick={() => setIntelMode('flights')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              intelMode === 'flights'
-                ? 'bg-sky-500 text-black shadow-lg shadow-sky-500/30'
-                : 'text-neutral-300 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Plane className={`w-4 h-4 ${intelMode === 'flights' ? 'text-black' : 'text-sky-400'}`} />
-            <span>Airspace</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
-                intelMode === 'flights' ? 'bg-black/20 text-black' : 'bg-white/10 text-neutral-300'
-              }`}
-            >
-              {activeFlightsList.length}
-            </span>
-          </button>
 
           <button
             onClick={() => setIntelMode('fires')}
@@ -3387,7 +3367,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
         <div className="flex items-center p-1 rounded-2xl bg-black/60 border border-white/20 shadow-2xl backdrop-blur-xl">
           {[
             { id: 'orbit', label: 'Tactical Orbit' },
-            { id: 'chase', label: intelMode === 'flights' ? 'Chase Cam' : intelMode === 'fires' ? 'Perimeter View' : 'Fault Line' },
+            { id: 'chase', label: intelMode === 'fires' ? 'Perimeter View' : 'Fault Line' },
             { id: 'topdown', label: 'Nadir 90°' },
           ].map((preset) => (
             <button
@@ -3412,9 +3392,7 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
         >
           <Search className="w-4 h-4 text-cyan-400" />
           <span className="hidden sm:inline">
-            {intelMode === 'flights'
-              ? currentFlight.callsign
-              : intelMode === 'fires'
+            {intelMode === 'fires'
               ? currentFire.locationName?.split(',')[0] || 'Wildfire Hotspot'
               : currentEarthquake.place?.split(' of ')[1] || currentEarthquake.place || 'Seismic Epicenter'}
           </span>
@@ -3444,39 +3422,13 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
         <div className="absolute top-20 right-6 z-40 w-80 max-h-96 rounded-3xl bg-black/90 border border-white/20 shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden animate-fade-in pointer-events-auto">
           <div className="p-3 border-b border-white/10 flex items-center justify-between">
             <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider font-mono">
-              Select {intelMode === 'flights' ? 'Flight' : intelMode === 'fires' ? 'Wildfire' : 'Earthquake'}
+              Select {intelMode === 'fires' ? 'Wildfire' : 'Earthquake'}
             </span>
             <button onClick={() => setIsSearchOpen(false)} className="text-neutral-400 hover:text-white cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
           <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {intelMode === 'flights' &&
-              activeFlightsList.map((fl, idx) => (
-                <button
-                  key={`${fl.icao24}-${idx}`}
-                  onClick={() => {
-                    setFlightIndex(idx);
-                    setIsSearchOpen(false);
-                  }}
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                    idx === flightIndex % activeFlightsList.length
-                      ? 'bg-sky-500/25 border-sky-400 text-white font-bold'
-                      : 'bg-white/5 border-white/5 hover:bg-white/10 text-neutral-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <Plane className="w-4 h-4 text-sky-400 shrink-0" />
-                    <div className="truncate">
-                      <div className="text-xs font-bold">{fl.callsign}</div>
-                      <div className="text-[10px] text-neutral-400 font-mono">{fl.originCountry}</div>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-mono text-sky-300 shrink-0">
-                    {Math.round(fl.altitude * 3.28084).toLocaleString()} ft
-                  </span>
-                </button>
-              ))}
 
             {intelMode === 'fires' &&
               activeFiresList.map((fr, idx) => (
@@ -3621,39 +3573,6 @@ export const GodsEye3DView: React.FC<GodsEye3DViewProps> = ({
                 </button>
               </div>
             </div>
-
-          {/* TELEMETRY GRID FOR AIRCRAFT */}
-          {intelMode === 'flights' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400">Altitude</span>
-                <p className="text-sm font-bold font-mono text-sky-300">
-                  {Math.round(currentFlight.altitude * 3.28084).toLocaleString()} ft
-                </p>
-                <span className="text-[9px] text-neutral-400">{Math.round(currentFlight.altitude)}m AMSL</span>
-              </div>
-
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400">Airspeed</span>
-                <p className="text-sm font-bold font-mono text-white">
-                  {Math.round(currentFlight.velocity * 1.94384)} kts
-                </p>
-                <span className="text-[9px] text-neutral-400">{Math.round(currentFlight.velocity * 3.6)} km/h</span>
-              </div>
-
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400">True Track</span>
-                <p className="text-sm font-bold font-mono text-white">{currentFlight.heading}°</p>
-                <span className="text-[9px] text-neutral-400">Compass Vector</span>
-              </div>
-
-              <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-                <span className="text-[10px] uppercase font-mono text-neutral-400">ICAO Hex</span>
-                <p className="text-xs font-bold font-mono uppercase text-emerald-300">{currentFlight.icao24}</p>
-                <span className="text-[9px] text-neutral-400 truncate">{currentFlight.originCountry}</span>
-              </div>
-            </div>
-          )}
 
           {/* TELEMETRY GRID FOR WILDFIRE */}
           {intelMode === 'fires' && (

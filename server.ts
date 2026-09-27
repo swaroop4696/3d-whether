@@ -3,8 +3,7 @@ import http from 'http';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type, Modality } from '@google/genai';
-import { WebSocketServer, WebSocket } from 'ws';
+import { GoogleGenAI, Type } from '@google/genai';
 import {
   fetchServerWeather,
   fetchServerAqi,
@@ -18,8 +17,148 @@ async function startServer() {
   const server = http.createServer(app);
   const PORT = Number(process.env.PORT) || 3000;
 
-  // CORS and preflight handling
+  // Enable trust proxy for accurate client IP resolution behind Cloud Run/reverse proxies
+  app.set('trust proxy', 1);
+
+  // In-memory sliding window rate limiter: maximum 10 requests per minute per IP address
+  interface RateLimitRecord {
+    count: number;
+    resetTime: number;
+  }
+  const rateLimitStore = new Map<string, RateLimitRecord>();
+
+  // Periodically clean up expired rate limit entries every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of rateLimitStore.entries()) {
+      if (now > record.resetTime) {
+        rateLimitStore.delete(ip);
+      }
+    }
+  }, 5 * 60 * 1000).unref();
+
+  // Rate Limiting Middleware for /api/* routes (10 requests per 60 seconds per IP)
+  const apiRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Exclude health check from aggressive rate limiting to keep dev/container probes alive
+    if (req.path === '/api/health') {
+      return next();
+    }
+
+    const forwarded = req.headers['x-forwarded-for'];
+    const clientIp = (
+      (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') ||
+      req.socket.remoteAddress ||
+      'unknown-client'
+    );
+
+    const now = Date.now();
+    const windowMs = 60 * 1000; // 1 minute window
+    const maxRequests = 10;
+
+    let record = rateLimitStore.get(clientIp);
+    if (!record || now > record.resetTime) {
+      record = { count: 1, resetTime: now + windowMs };
+      rateLimitStore.set(clientIp, record);
+    } else {
+      record.count += 1;
+    }
+
+    const remaining = Math.max(0, maxRequests - record.count);
+    const retryAfterSeconds = Math.max(1, Math.ceil((record.resetTime - now) / 1000));
+
+    res.setHeader('X-RateLimit-Limit', maxRequests.toString());
+    res.setHeader('X-RateLimit-Remaining', remaining.toString());
+    res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000).toString());
+
+    if (record.count > maxRequests) {
+      res.setHeader('Retry-After', retryAfterSeconds.toString());
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: 'Rate limit exceeded: maximum 10 requests per minute per IP address allowed.',
+        retryAfter: retryAfterSeconds,
+      });
+    }
+
+    next();
+  };
+
+  /**
+   * Sanitizes all incoming query parameters:
+   * Strips HTML tags, script injection tokens, control characters, and dangerous punctuation
+   */
+  const sanitizeQueryParam = (val: any): any => {
+    if (typeof val === 'string') {
+      return val
+        // Strip null bytes and control chars
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        // Strip HTML/XML tags
+        .replace(/<[^>]*>?/gm, '')
+        // Strip script/javascript/data URI pseudoprotocols
+        .replace(/javascript:/gi, '')
+        .replace(/data:/gi, '')
+        .replace(/vbscript:/gi, '')
+        // Strip potential prototype poisoning keywords
+        .replace(/__proto__|prototype|constructor/gi, '')
+        // Strip dangerous quote and tag characters while preserving geographic & text symbols
+        .replace(/["'`;<>]/g, '')
+        .trim();
+    }
+    if (Array.isArray(val)) {
+      return val.map(sanitizeQueryParam);
+    }
+    if (val !== null && typeof val === 'object') {
+      const sanitizedObj: Record<string, any> = {};
+      for (const key of Object.keys(val)) {
+        const cleanKey = sanitizeQueryParam(key);
+        sanitizedObj[cleanKey] = sanitizeQueryParam(val[key]);
+      }
+      return sanitizedObj;
+    }
+    return val;
+  };
+
+  const querySanitizer = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    if (req.query && typeof req.query === 'object') {
+      const sanitized: Record<string, any> = {};
+      for (const [key, value] of Object.entries(req.query)) {
+        const cleanKey = sanitizeQueryParam(key);
+        sanitized[cleanKey] = sanitizeQueryParam(value);
+      }
+      req.query = sanitized;
+    }
+    next();
+  };
+
+  // Strong Content Security Policy & Security headers
   app.use((_req, res, next) => {
+    // Robust Content Security Policy (CSP) restricting script sources and capabilities
+    const cspDirectives = [
+      "default-src 'self'",
+      // Strict script sources: self, inline scripts for Vite HMR/templates, and Google Maps API
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://fonts.googleapis.com",
+      // Restrict styling to self, Google Fonts, Leaflet CDN styles, and inline styles for Tailwind dynamic classes
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://*.googleapis.com",
+      // Allow fonts from Google Fonts and self
+      "font-src 'self' https://fonts.gstatic.com data:",
+      // Allow images from self, data URIs, OpenStreetMap tiles, CartoDB, Esri ArcGIS, USGS, and Google Maps
+      "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.tile.openstreetmap.fr https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://services.arcgisonline.com https://maps.googleapis.com https://*.googleapis.com https://*.ggpht.com https://unpkg.com",
+      // Connect endpoints for API proxy, live satellite feeds, USGS, Open-Meteo, and Google APIs
+      "connect-src 'self' https://api.open-meteo.com https://earthquake.usgs.gov https://nominatim.openstreetmap.org https://maps.googleapis.com https://*.googleapis.com https://*.google.com ws: wss:",
+      // Workers for Web Workers (e.g. Three.js geometry/offscreen canvas)
+      "worker-src 'self' blob:",
+      // Restrict objects, embeds, and base URI
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      // Frame ancestors allowing embed inside parent AI Studio preview container
+      "frame-ancestors 'self' https://*.google.com https://*.run.app https://aistudio.google.com",
+    ];
+
+    res.setHeader('Content-Security-Policy', cspDirectives.join('; '));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -28,6 +167,12 @@ async function startServer() {
     }
     next();
   });
+
+  // Apply query parameter sanitization across all incoming requests
+  app.use(querySanitizer);
+
+  // Apply rate limiting to all backend API proxy routes
+  app.use('/api', apiRateLimiter);
 
   app.use(express.json({ limit: '5mb' }));
 
@@ -102,14 +247,14 @@ async function startServer() {
     }
   });
 
-  // Safe client configuration endpoint: returns any server-configured Google Maps key
+  // Safe status endpoint: never exposes raw secrets or keys
   app.get('/api/config/maps-key', (_req, res) => {
-    const key =
+    const hasKey = Boolean(
       process.env.VITE_GOOGLE_MAPS_API_KEY ||
       process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.MAPS_API_KEY ||
-      '';
-    res.json({ key: key.trim() });
+      process.env.MAPS_API_KEY
+    );
+    res.json({ configured: hasKey });
   });
 
   // Weather Telemetry Proxy Endpoint (Keyless Open-Meteo + OWM fallback with 100% uptime fallback)
@@ -380,8 +525,7 @@ Interpret their spatial intent.
     }
   });
 
-  // Multi-Turn Gemini Chatbot Endpoint
-  // Supports gemini-3.5-flash (general), gemini-3.1-pro-preview (complex reasoning), and gemini-3.1-flash-lite (fast)
+  // Multi-Turn Gemini Chatbot Endpoint with Live Real-Time Telemetry Grounding
   app.post('/api/gemini/chat', async (req, res) => {
     const { message, history, model, systemRole, currentContext } = req.body || {};
 
@@ -389,25 +533,100 @@ Interpret their spatial intent.
       return res.status(400).json({ error: 'A message string is required' });
     }
 
-    // Selected model with fallback to gemini-3.5-flash
-    const allowedModels = ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite'];
-    const chosenModel = allowedModels.includes(model) ? model : 'gemini-3.5-flash';
+    const sanitizedMessage = message.slice(0, 1500).trim();
+
+    // Selected model with fallback to gemini-2.5-flash
+    const allowedModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
+    const chosenModel = allowedModels.includes(model) ? model : 'gemini-2.5-flash';
+
+    // Construct live real-time telemetry feed
+    let realTimeDataSection = '';
+    const ctx = currentContext || {};
+
+    // Check if the user is asking about weather/conditions for another city
+    let targetLocationWeather: any = null;
+    let targetLocationAqi: any = null;
+    let targetCityName = '';
+
+    const cityMatch =
+      sanitizedMessage.match(/(?:weather|temperature|temp|climate|forecast|aqi|conditions|air quality)\s+(?:in|for|at|of)\s+([A-Za-z\s]+?)(?:\?|\.|$)/i) ||
+      sanitizedMessage.match(/(?:fly to|go to|check)\s+([A-Za-z\s]+?)(?:\s+and\s+|\?|\.|$)/i);
+
+    if (cityMatch && cityMatch[1] && cityMatch[1].trim().length >= 2) {
+      const searchTarget = cityMatch[1].trim();
+      try {
+        const locations = await searchServerLocations(searchTarget);
+        if (locations.length > 0) {
+          const loc = locations[0];
+          targetCityName = loc.displayName || loc.name;
+          const [wData, aqiData] = await Promise.all([
+            fetchServerWeather(loc.lat, loc.lon, loc.name).catch(() => null),
+            fetchServerAqi(loc.lat, loc.lon).catch(() => null),
+          ]);
+          targetLocationWeather = wData;
+          targetLocationAqi = aqiData;
+        }
+      } catch (err) {
+        console.warn('[Server] Dynamic location telemetry fetch failed:', err);
+      }
+    }
+
+    if (targetLocationWeather) {
+      realTimeDataSection += `
+[REAL-TIME LIVE TELEMETRY FOR REQUESTED LOCATION: ${targetCityName.toUpperCase()}]
+- Current Temperature: ${targetLocationWeather.temp}°C (Feels like: ${targetLocationWeather.feels_like}°C)
+- Weather Status: ${targetLocationWeather.weather_desc} (${targetLocationWeather.weather_main})
+- Relative Humidity: ${targetLocationWeather.humidity}%, Barometric Pressure: ${targetLocationWeather.pressure} hPa
+- Wind Speed: ${(targetLocationWeather.wind_speed * 3.6).toFixed(1)} km/h (${targetLocationWeather.wind_speed} m/s), Direction: ${targetLocationWeather.wind_deg}°
+- Cloud Cover: ${targetLocationWeather.clouds}%, Coordinates: Lat ${targetLocationWeather.lat.toFixed(2)}, Lon ${targetLocationWeather.lon.toFixed(2)}
+`;
+      if (targetLocationAqi) {
+        realTimeDataSection += `- Real-Time Air Quality: AQI ${targetLocationAqi.aqi} (${targetLocationAqi.label}), PM2.5: ${targetLocationAqi.pm2_5} µg/m³, PM10: ${targetLocationAqi.pm10} µg/m³\n`;
+      }
+    }
+
+    if (ctx.weather || ctx.lat != null) {
+      realTimeDataSection += `
+[ACTIVE OBSERVER REAL-TIME TELEMETRY: ${ctx.name ? ctx.name.toUpperCase() : 'ORBITAL VANTAGE'}]
+`;
+      if (ctx.weather) {
+        realTimeDataSection += `- Current Temperature: ${ctx.weather.temp}°C (Feels like: ${ctx.weather.feels_like}°C, Min: ${ctx.weather.temp_min}°C, Max: ${ctx.weather.temp_max}°C)
+- Weather Conditions: ${ctx.weather.weather_desc} (${ctx.weather.weather_main})
+- Relative Humidity: ${ctx.weather.humidity}%, Barometric Pressure: ${ctx.weather.pressure} hPa
+- Wind Vector: ${(ctx.weather.wind_speed * 3.6).toFixed(1)} km/h (${ctx.weather.wind_speed} m/s) at ${ctx.weather.wind_deg}°
+- Cloud Coverage: ${ctx.weather.clouds}%
+`;
+      }
+      if (ctx.aqi) {
+        realTimeDataSection += `- Real-Time Air Quality: AQI ${ctx.aqi.aqi} (${ctx.aqi.label})
+  - PM2.5: ${ctx.aqi.pm2_5} µg/m³, PM10: ${ctx.aqi.pm10} µg/m³, NO2: ${ctx.aqi.no2 || 'Normal'} µg/m³
+  - Health Advisory: ${ctx.aqi.healthRecommendation}
+`;
+      }
+      if (ctx.firesCount != null) {
+        realTimeDataSection += `- NASA FIRMS Active Thermal Anomalies: ${ctx.firesCount} active global wildfire hotspots currently monitored.\n`;
+      }
+      if (ctx.earthquakesCount != null) {
+        realTimeDataSection += `- USGS Real-Time Seismic Activity: ${ctx.earthquakesCount} earthquake events monitored globally. ${ctx.strongestEarthquake ? `Strongest: M ${ctx.strongestEarthquake.mag} (${ctx.strongestEarthquake.place})` : ''}\n`;
+      }
+    }
 
     // System instruction based on chosen persona role
     let systemInstruction = `You are the Gemini Planetary & Earth Intelligence Assistant for an interactive 3D Globe platform ("God's Eye View" & "GeoAtmosphere 3D").
 You provide authoritative, clear, and insightful answers about planetary weather, atmospheric physics, seismic faults, wildfires, and geography.
-Current user coordinates and location: ${JSON.stringify(currentContext || {})}.
-Be direct, helpful, and scientific yet accessible.
+Current UTC Timestamp: ${new Date().toUTCString()}
+
+${realTimeDataSection}
+
+CRITICAL REAL-TIME TELEMETRY INSTRUCTION:
+When the user asks questions about current weather, temperature, humidity, wind speed, air quality, AQI, wildfires, or earthquakes, you MUST ground your answer directly in the exact REAL-TIME LIVE TELEMETRY provided above. Quote the exact numbers (e.g. temperatures in °C, wind speeds, AQI values, active fire counts) accurately, directly, and authoritatively.
+
 If the user asks you to fly or navigate somewhere or inspect fires/earthquakes, mention where you are taking them.`;
 
     if (systemRole === 'climate') {
-      systemInstruction = `You are a Senior Climate & Meteorological Specialist for the 3D Planetary Dashboard.
-Focus deeply on atmospheric circulation, greenhouse gas dynamics, air quality (PM2.5, NO2), extreme weather events, and climate resilience.
-Current user location: ${JSON.stringify(currentContext || {})}.`;
+      systemInstruction += `\nRole Focus: Senior Climate Specialist. Focus deeply on atmospheric circulation, greenhouse gas dynamics, air quality (PM2.5, NO2), extreme weather events, and climate resilience.`;
     } else if (systemRole === 'navigator') {
-      systemInstruction = `You are a Tactical Earth Navigator for the 3D Planetary Observation Platform.
-Focus on geographic navigation, coordinates, orbital vantage points, and tactical flight/road corridors.
-Current user location: ${JSON.stringify(currentContext || {})}.`;
+      systemInstruction += `\nRole Focus: Tactical Earth Navigator. Focus on geographic navigation, coordinates, orbital vantage points, and tactical flight/road corridors.`;
     }
 
     try {
@@ -416,7 +635,7 @@ Current user location: ${JSON.stringify(currentContext || {})}.`;
       // Format previous history into Gemini contents format
       const contentsPayload: any[] = [];
       if (Array.isArray(history)) {
-        for (const item of history) {
+        for (const item of history.slice(-10)) {
           if (item && item.role && item.parts && Array.isArray(item.parts)) {
             contentsPayload.push({
               role: item.role === 'assistant' ? 'model' : 'user',
@@ -429,7 +648,7 @@ Current user location: ${JSON.stringify(currentContext || {})}.`;
       // Add current message
       contentsPayload.push({
         role: 'user',
-        parts: [{ text: message }],
+        parts: [{ text: sanitizedMessage }],
       });
 
       const response = await ai.models.generateContent({
@@ -440,13 +659,13 @@ Current user location: ${JSON.stringify(currentContext || {})}.`;
         },
       });
 
-      const replyText = response.text || "I have analyzed your query.";
+      const replyText = response.text || "I have analyzed your query with orbital telemetry.";
 
       // Check if user asked to fly or travel to a place
       let actionData: any = null;
-      const lower = message.toLowerCase();
+      const lower = sanitizedMessage.toLowerCase();
       if (lower.startsWith('fly to') || lower.startsWith('go to') || lower.startsWith('navigate to') || lower.startsWith('take me to')) {
-        const placeName = message.replace(/^(fly to|go to|navigate to|take me to)\s+/i, '').replace(/[?.!]/g, '').trim();
+        const placeName = sanitizedMessage.replace(/^(fly to|go to|navigate to|take me to)\s+/i, '').replace(/[?.!]/g, '').trim();
         actionData = {
           action: 'flyTo',
           targetLocation: { name: placeName },
@@ -466,88 +685,12 @@ Current user location: ${JSON.stringify(currentContext || {})}.`;
       console.warn('[Server] Gemini Chat error, falling back:', err?.message || err);
 
       return res.json({
-        replyText: `[Planetary Assistant] Regarding "${message}": Our orbital telemetry monitors global air quality, seismic belts, and thermal anomalies. You can explore active wildfires (NASA FIRMS) and recent earthquakes (USGS) in 3D right now.`,
+        replyText: `[Planetary Assistant] Regarding "${sanitizedMessage}": Real-time telemetry is synced for ${ctx.name || 'Earth orbit'}.${ctx.weather ? ` Currently ${Math.round(ctx.weather.temp)}°C (${ctx.weather.weather_desc}) with wind at ${Math.round(ctx.weather.wind_speed * 3.6)} km/h.` : ''}${ctx.aqi ? ` Air Quality Index is ${ctx.aqi.aqi} (${ctx.aqi.label}).` : ''}`,
         modelUsed: chosenModel,
         actionData: null,
       });
     }
   });
-
-  // WebSocket Server for Gemini Live API (gemini-3.8-live) Real-Time Voice Conversations
-  const wss = new WebSocketServer({ server, path: '/live' });
-
-  wss.on('connection', async (clientWs: WebSocket) => {
-    console.log('[GeminiLive] Client connected to /live WebSocket');
-
-    let session: any = null;
-
-    try {
-      const ai = getGeminiClient();
-
-      session = await ai.live.connect({
-        model: 'gemini-3.8-live',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
-          },
-          systemInstruction:
-            'You are the real-time Gemini voice copilot for the 3D Planetary & Earth Dashboard. Keep your spoken responses concise, natural, and helpful. You can discuss weather, geography, wildfires, and earthquakes.',
-        },
-        callbacks: {
-          onmessage: (message: any) => {
-            if (clientWs.readyState !== WebSocket.OPEN) return;
-
-            const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (audio) {
-              clientWs.send(JSON.stringify({ audio }));
-            }
-
-            const text = message.serverContent?.modelTurn?.parts?.[0]?.text;
-            if (text) {
-              clientWs.send(JSON.stringify({ text }));
-            }
-
-            if (message.serverContent?.interrupted) {
-              clientWs.send(JSON.stringify({ interrupted: true }));
-            }
-          },
-        },
-      });
-
-      clientWs.on('message', (data: Buffer | string) => {
-        try {
-          const parsed = JSON.parse(data.toString());
-
-          if (parsed.audio && session) {
-            session.sendRealtimeInput({
-              audio: { data: parsed.audio, mimeType: 'audio/pcm;rate=16000' },
-            });
-          }
-        } catch (err) {
-          console.warn('[GeminiLive] Error handling client packet:', err);
-        }
-      });
-
-      clientWs.on('close', () => {
-        console.log('[GeminiLive] Client disconnected');
-        if (session && typeof session.close === 'function') {
-          session.close();
-        }
-      });
-    } catch (err: any) {
-      console.error('[GeminiLive] Error connecting to Gemini Live session:', err?.message || err);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(
-          JSON.stringify({
-            error: 'Failed to initiate Gemini Live API session. Ensure GEMINI_API_KEY is configured.',
-          })
-        );
-        clientWs.close();
-      }
-    }
-  });
-
   // Development Vite middleware vs Production static serving
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

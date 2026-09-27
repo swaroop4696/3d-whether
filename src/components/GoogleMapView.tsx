@@ -37,7 +37,6 @@ import {
   loadGoogleMapsScript,
   getGoogleMapsApiKey,
 } from '../services/googleMapsLoader';
-import { KeyRestrictionsModal } from './KeyRestrictionsModal';
 import { StreetViewPanoramaView } from './StreetViewPanoramaView';
 
 interface GoogleMapViewProps {
@@ -172,7 +171,6 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
     onToggleStreetView?.(active);
   };
 
-  const [isRestrictionsModalOpen, setIsRestrictionsModalOpen] = useState(false);
   const [isLayerMenuOpen, setIsLayerMenuOpen] = useState(false);
   const [currentZoom, setCurrentZoom] = useState<number>(16);
 
@@ -1044,15 +1042,13 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
             <span>Roads: {showRoadOverlay ? 'ON' : 'OFF'}</span>
           </button>
 
-          {/* Engine Switcher (Leaflet Precision vs Google Maps) */}
-          <button
-            onClick={() => setIsRestrictionsModalOpen(true)}
-            title="Cartography Engine Status & Settings"
-            className="pointer-events-auto hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-full weather-gpt-pill text-xs font-light tracking-wide transition-all shadow-lg active:scale-95 cursor-pointer border border-sky-400/25 bg-[#0c121e]/90 backdrop-blur-xl text-sky-300 hover:text-white"
+          {/* Engine Indicator (Leaflet Precision vs Google Maps) */}
+          <div
+            className="pointer-events-auto hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-full weather-gpt-pill text-xs font-light tracking-wide shadow-lg border border-sky-400/25 bg-[#0c121e]/90 backdrop-blur-xl text-sky-300"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>{mapEngine === 'google' ? 'Google Maps' : 'Precision Engine'}</span>
-          </button>
+          </div>
         </div>
 
         {/* 5. Navigation & Zoom Controls at Bottom Right */}
@@ -1158,15 +1154,6 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
             }, 350);
             return next;
           });
-        }}
-      />
-
-      {/* 8. Key Restrictions Modal */}
-      <KeyRestrictionsModal
-        isOpen={isRestrictionsModalOpen}
-        onClose={() => setIsRestrictionsModalOpen(false)}
-        onKeyUpdated={() => {
-          initGoogleMap();
         }}
       />
     </div>

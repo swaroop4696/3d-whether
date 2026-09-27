@@ -1436,30 +1436,6 @@ export const ThreeGlobe = React.forwardRef<GlobeHandle, ThreeGlobeProps>(
                 <span>{autoRotateGlobe ? 'Rotating' : 'Paused'}</span>
               </button>
             )}
-
-            {/* Reset View */}
-            <button
-              id="reset-globe-view-btn"
-              onClick={() => resetView()}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white/10 text-neutral-300 border border-white/10 hover:bg-white/15 hover:text-white transition-all"
-              title="Reset to orbital perspective"
-            >
-              <Compass className="w-3 h-3 text-cyan-400" />
-              <span>Orbit</span>
-            </button>
-
-            {/* Map & Street Roads Trigger */}
-            {onOpenStreetMap && (
-              <button
-                id="inspect-street-map-btn"
-                onClick={onOpenStreetMap}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-500/40 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer"
-                title="Open 2D high-precision map, streets & live traffic"
-              >
-                <Map className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Open Map</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
